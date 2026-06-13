@@ -55,5 +55,11 @@
 </template>
 
 <script setup>
-const route = useRoute()
+const route = useRoute()  
+
+const handleLogout = () => {
+  const sessionCookie = useCookie('auth_session')
+  sessionCookie.value = null
+  navigateTo('/login')
+}
 </script>
