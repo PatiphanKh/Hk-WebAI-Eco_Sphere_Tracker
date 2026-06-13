@@ -13,13 +13,15 @@
           การตั้งค่า Simulator & Engine
         </h3>
         
-        <div class="grid grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Engine การทำงาน</label>
-            <select class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition">
+            <select 
+              v-model="engineInput"
+              class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
+            >
               <option value="offline">Local Fallback Engine (Offline)</option>
               <option value="cloud">Cloud Native Engine (Online)</option>
-              <option value="hybrid">Hybrid Engine</option>
             </select>
           </div>
           
@@ -27,15 +29,19 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">ความถี่การซิงค์ข้อมูล (วินาที)</label>
             <input 
               type="number" 
-              value="30"
+              v-model="syncFreqInput"
               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
             />
           </div>
 
-          <div class="col-span-2">
+          <div class="md:col-span-2">
             <label class="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
-              <span class="text-sm text-gray-700">บันทึกประวัติการจำลองใน Cache เมื่อออฟไลน์ (Local Offline Sync)</span>
+              <input 
+                type="checkbox" 
+                v-model="cacheOfflineInput"
+                class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" 
+              />
+              <span class="text-sm text-gray-700 font-semibold">บันทึกประวัติการจำลองใน Cache เมื่อออฟไลน์ (Local Offline Sync)</span>
             </label>
           </div>
         </div>
@@ -48,12 +54,12 @@
           ข้อมูลผู้ใช้งาน
         </h3>
         
-        <div class="grid grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">ชื่อผู้ใช้งาน</label>
             <input 
               type="text" 
-              value="Somchai Jaidee"
+              v-model="usernameInput"
               class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
             />
           </div>
@@ -64,20 +70,73 @@
               type="text" 
               value="Admin" 
               disabled
-              class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-500 cursor-not-allowed"
+              class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-500 cursor-not-allowed font-bold"
             />
           </div>
         </div>
       </div>
 
-      <div class="flex justify-end gap-3">
-        <button class="px-6 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+      <div class="flex justify-end gap-3 border-t border-gray-100 pt-6">
+        <button 
+          @click="cancelSettings"
+          class="px-6 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+        >
           ยกเลิก
         </button>
-        <button class="px-6 py-3 bg-green-950 text-white rounded-xl text-sm font-medium hover:bg-green-900 transition shadow-sm">
+        <button 
+          @click="saveSettings"
+          class="px-6 py-3 bg-[#1b4332] text-white rounded-xl text-sm font-bold hover:bg-[#133024] transition shadow-sm"
+        >
           บันทึกการตั้งค่า
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const config = useRuntimeConfig()
+
+// globally shared states
+const engineMode = useState('engine_mode', () => 'offline')
+const geminiApiKey = useState('gemini_api_key', () => config.public.geminiApiKey || '')
+
+// local inputs
+const engineInput = ref('offline')
+const syncFreqInput = ref(30)
+const cacheOfflineInput = ref(true)
+const usernameInput = ref('Somchai Jaidee')
+
+const loadSettings = () => {
+  if (typeof window !== 'undefined') {
+    engineInput.value = localStorage.getItem('engine_mode') || 'offline'
+    syncFreqInput.value = parseInt(localStorage.getItem('sync_frequency') || '30', 10)
+    cacheOfflineInput.value = localStorage.getItem('cache_offline') !== 'false'
+    usernameInput.value = localStorage.getItem('username') || 'Somchai Jaidee'
+  }
+}
+
+const saveSettings = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('engine_mode', engineInput.value)
+    localStorage.setItem('sync_frequency', syncFreqInput.value.toString())
+    localStorage.setItem('cache_offline', cacheOfflineInput.value.toString())
+    localStorage.setItem('username', usernameInput.value)
+  }
+
+  // Update shared states
+  engineMode.value = engineInput.value
+
+  alert('บันทึกการตั้งค่าเรียบร้อยแล้ว!')
+}
+
+const cancelSettings = () => {
+  loadSettings()
+}
+
+onMounted(() => {
+  loadSettings()
+})
+</script>

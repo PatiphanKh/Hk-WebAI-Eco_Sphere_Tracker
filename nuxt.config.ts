@@ -5,5 +5,10 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/tailwindcss',
     '@nuxt/icon'
-  ]
+  ],
+  runtimeConfig: {
+    public: {
+      geminiApiKey: process.env.GEMINI_API_KEY || ''
+    }
+  }
 })
