@@ -1,55 +1,59 @@
-# 🌱 Eco-Sphere Tracker (เครื่องมือคำนวณและติดตามคาร์บอนฟุตพริ้นท์ส่วนบุคคล)
+# 🌱 Eco-Sphere Tracker (Nuxt + Supabase Project Context)
 
-**Eco-Sphere Tracker** คือแอปพลิเคชันเว็บแบบ Offline-first ที่ชุบชีวิตข้อมูลพฤติกรรมการใช้ชีวิตและการเงินในอดีตของผู้ใช้จากอุตสาหกรรมต่าง ๆ ในรูปแบบดิบ (JSON) ให้กลายเป็นภาพรวมผลกระทบสิ่งแวดล้อมเชิงลึก ช่วยให้ผู้ใช้ตระหนักรู้และปรับเปลี่ยนพฤติกรรมเพื่อมุ่งสู่การลดคาร์บอนอย่างยั่งยืน
-
----
-
-## 🎯 ที่มาและปัญหา (Background & Motivation)
-ในแต่ละวัน พฤติกรรมการใช้ชีวิตและการบริโภคของเรา เช่น การเดินทางด้วยเครื่องบิน การสั่งอาหารเดลิเวอรี่ที่มีบรรจุภัณฑ์พลาสติก การช้อปปิ้งออนไลน์ หรือแม้แต่การเข้าพักโรงแรม ล้วนสร้างคาร์บอนฟุตพริ้นท์ (Carbon Footprint) ปล่อยก๊าซเรือนกระจกสะสมเข้าสู่บรรยากาศ ทว่าผู้บริโภคทั่วไปมักไม่สามารถรับรู้ตัวเลขผลกระทบนี้ได้อย่างเป็นรูปธรรม 
-
-โปรเจกต์นี้จึงถูกพัฒนาขึ้นเพื่อดึงข้อมูลเชิงกายภาพและพฤติกรรมจริงของผู้ใช้งานมาจำลอง แปลงค่า และนำเสนอผลกระทบสิ่งแวดล้อมพร้อมเครื่องมือให้คำแนะนำอัจฉริยะ (AI Coach) เพื่อช่วยวางแผนการลดหย่อนและสร้างสมดุลทางนิเวศ
+**Eco-Sphere Tracker** คือแอปพลิเคชันเว็บแบบ Offline-first ที่พัฒนาด้วยเฟรมเวิร์ก Nuxt.js ร่วมกับฐานข้อมูล Supabase โดยทำหน้าที่ชุบชีวิตข้อมูลพฤติกรรมการใช้ชีวิตและการเงินในอดีตจากข้อมูลดิบ (JSON) ให้บันทึกเข้าสู่ฐานข้อมูลคลาวด์ และคำนวณประมวลผลเป็นตัวเลขคาร์บอนฟุตพริ้นท์สะสม (kg CO₂) และคะแนน Eco Points โดยมีระบบสตรีมมิ่งข้อมูลและซิงก์ข้อมูลแบบเรียลไทม์
 
 ---
 
-## 🚀 ฟีเจอร์หลักของระบบ (Key Features)
-
-### 1. 📊 แดชบอร์ดสรุปผลกระทบคาร์บอน (Eco Dashboard & Analytics)
-* **KPIs สรุปภาพรวม:** แสดงปริมาณการปล่อยคาร์บอนสะสมทั้งหมด (Total CO₂ kg) เทียบกับเป้าหมายจำกัดคาร์บอน และแสดงคะแนนความดีสิ่งแวดล้อม (Eco Points)
-* **แผนภูมิจำแนกสัดส่วน:** ใช้แผนภูมิ Conic-Gradient ในการแจกแจงสัดส่วนคาร์บอนตามแหล่งกำเนิด (เช่น เที่ยวบิน, ขยะอาหารเดลิเวอรี่, ของช้อปปิ้ง, โรงแรมที่พัก)
-* **แผนภูมิแท่งประวัติและแนวโน้ม (Trend Chart):** แสดงแนวโน้มการลดคาร์บอนของผู้ใช้ในแต่ละเดือนเปรียบเทียบในอดีต
-
-### 2. 🤖 ผู้ช่วยอัจฉริยะวิเคราะห์นิเวศวิทยา (AI Eco-Advisor Chatbot)
-* **Gemini API Integration:** เชื่อมต่อกับ Google Gemini API (Free Tier) เพื่อทำหน้าที่เป็นโค้ชรักษ์โลกส่วนตัว วิเคราะห์ข้อมูลพฤติกรรมจริงในเครื่องของผู้ใช้และให้คำแนะนำแบบเฉพาะเจาะจง (Personalized green recommendations)
-* **Local Fallback Engine:** หากไม่มีคีย์ API หรือเครือข่ายอินเทอร์เน็ตหลุด ระบบจะสลับไปใช้ตัววิเคราะห์ข้อมูลออฟไลน์ (Rule-based) ในเครื่องทันที ทำให้ผู้ใช้ยังพิมพ์คุยสอบถามข้อมูลสถิติสิ่งแวดล้อมของตนเองได้ตลอดเวลา
-
-### 3. ⚡ ตัวจำลองมลพิษเรียลไทม์ (Real-time Carbon Simulator)
-* จำลองสถานการณ์เมื่อมีพฤติกรรมและการทำธุรกรรมใหม่ไหลเข้ามาในชีวิตผู้ใช้ (เช่น การสั่งซื้อสินค้าใหม่, การสั่งอาหารเดลิเวอรี่, การจองตั๋วบินฉุกเฉิน)
-* ยอดคาร์บอนฟุตพริ้นท์สะสมและแผนภูมิแสดงผลบนแดชบอร์ดจะอัปเดตแบบสด ๆ ทันทีโดยไม่ต้องโหลดหน้าเว็บซ้ำ พร้อมมีกล่องแจ้งเตือน (Toast Alert) แสดงผลกระทบคาร์บอนของพฤติกรรมนั้น ๆ เป็นกิโลกรัมคาร์บอน
-
-### 4. 📱 แอปพลิเคชันออฟไลน์แบบสมบูรณ์ (PWA / Offline-first)
-* ติดตั้ง **Service Worker** และระบบแคชไฟล์ เพื่อให้สามารถเปิดเว็บแอปพลิเคชันขึ้นมาใช้งานและแสดงผลหน้าจอได้อย่างรวดเร็วแม้สัญญาณเน็ตขาดหาย
-* ข้อมูลทั้งหมดถูกจัดเก็บและประมวลผลบนเครื่องของผู้ใช้ด้วย **LocalStorage** ของบราวเซอร์
+## 🚀 ฟีเจอร์หลัก (Key Features)
+1. **Dashboard & Carbon Analytics:** สรุปค่าคาร์บอนสะสม สัดส่วนการปล่อยตามประเภทกิจกรรม และกราฟแท่งแนวโน้มประวัติรายเดือน
+2. **Supabase Real-time Integration:** ใช้ระบบ Real-time Listeners ของ Supabase ในการดักฟังข้อมูลการทำธุรกรรมหรือการสั่งซื้อใหม่ ทำให้หน้าจอแอปพลิเคชันอัปเดตอัตโนมัติเมื่อเกิดกิจกรรมใหม่ในฐานข้อมูล
+3. **AI Eco-Advisor Chatbot:** ผู้ช่วยส่วนตัววิเคราะห์คาร์บอนตามพฤติกรรมจริงของผู้ใช้โดยใช้ Gemini API (มีระบบ Local Fallback ดึงข้อมูลตาราง Supabase ที่แคชไว้มาวิเคราะห์ออฟไลน์)
+4. **PWA & Local Cache:** ใช้โมดูล PWA เพื่อแคชหน้าเว็บ และแคชข้อมูล Supabase ล่าสุดลงในบราวเซอร์ ทำให้เข้าชมตั๋วเดินทางและจองโรงแรมได้ปกติแม้เน็ตหลุด
 
 ---
 
-## 📂 โครงสร้างและการเชื่อมโยงข้อมูล (Data Model & Schema)
+## 📂 โครงสร้างการทำงานของไฟล์ใน Nuxt & Supabase (Nuxt + Supabase Project Architecture)
 
-ระบบจะดึงฐานข้อมูลจำลอง JSON ทั้ง 9 อุตสาหกรรมในระบบมาคำนวณคาร์บอนฟุตพริ้นท์โดยมีคีย์หลักคือ `user_id` ในการดึงความสัมพันธ์ข้ามไฟล์ดังนี้:
+การจัดวางสถาปัตยกรรมระบบจะแบ่งองค์ประกอบออกเป็นไฟล์สำคัญต่าง ๆ (แสดงเฉพาะชื่อไฟล์ ไม่ระบุพาท) ดังนี้:
 
-* **ข้อมูลผู้ใช้:** [users.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/users.json)
-* **หมวดหมู่ที่ปล่อยคาร์บอนหลัก:**
-  * **การบิน (Carbon สูงสุด):** คำนวณจากไฟล์ [flight_tickets.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/3. ระบบจองตั๋วเดินทาง (Travel Ticketing)/flight_tickets.json) และ [flights.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/3. ระบบจองตั๋วเดินทาง (Travel Ticketing)/flights.json) (อิงพิกัดระยะทางจริงจาก [locations.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/10. common/locations.json))
-  * **โรงแรมที่พัก:** คำนวณจากระยะเวลาพักและสิ่งอำนวยความสะดวกใน [hotel_bookings.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/2. ระบบจองโรงแรม (Hotel Booking)/hotel_bookings.json) และ [hotels.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/2. ระบบจองโรงแรม (Hotel Booking)/hotels.json)
-  * **อาหารและการจัดส่ง:** คำนวณจากบรรจุภัณฑ์พลาสติกของการจัดส่งเดลิเวอรี่ และประเภทส่วนผสมอาหารใน [food_orders.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/5. ระบบสั่งอาหาร (Food Delivery)/food_orders.json) และ [restaurants.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/5. ระบบสั่งอาหาร (Food Delivery)/restaurants.json)
-  * **การบริโภคสินค้า:** คำนวณความสิ้นเปลืองของขยะและทรัพยากรตามประเภทสินค้าใน [ecommerce_orders.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/1. ระบบร้านค้า (E-commerce)/ecommerce_orders.json) และ [products.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/1. ระบบร้านค้า (E-commerce)/products.json)
-* **กิจกรรมช่วยลดคาร์บอน (Carbon Offsets):**
-  * **การศึกษาและการทำงานออนไลน์:** ดึงข้อมูลความพยายามทำงานแบบออนไลน์และการสอบวัดผลจาก [enrollments.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/7. ระบบเรียนออนไลน์ (Education - LMS)/enrollments.json) และ [tasks.json](file:///C:/Users/localhost/Documents/antigravity/lucid-hopper/data/9. ระบบจัดการงาน (Task - Productivity)/tasks.json) มาแปลงเป็นแต้ม Eco Points ชดเชย
+### ⚙️ ไฟล์ตั้งค่าและโครงร่างหลัก (Configuration & Root)
+* `package.json` - ระบุโมดูลและ Dependencies (Nuxt 3, @nuxtjs/supabase, Vite, PWA module)
+* `nuxt.config.ts` - เปิดใช้งานและตั้งค่าโมดูล PWA, โครงสร้าง CSS และโมดูล `@nuxtjs/supabase` สำหรับเชื่อมต่อนักพัฒนา
+* `.env` - เก็บค่ากำหนดการเชื่อมต่อ API ของ Supabase (SUPABASE_URL และ SUPABASE_KEY)
+* `app.vue` - โครงร่างเทมเพลตหลักของหน้าเว็บ กำหนดโครงสร้าง Sidebar Navigation และ Header
+
+### 📄 หน้าเว็บระบบ (Pages)
+* `index.vue` - สรุป KPIs และแสดงผลแผนภูมิกราฟวงกลมและกราฟแท่งยอดคาร์บอนฟุตพริ้นท์สะสม
+* `transactions.vue` - ตารางประวัติธุรกรรมการเงิน ดึงข้อมูลและฟิลเตอร์รายการรายรับ/รายจ่ายแบบเรียลไทม์จาก Supabase
+* `tasks.vue` - ตารางภารกิจประจำวันและคอร์สเรียน ดึงสถานะการเคลียร์งานจากฐานข้อมูลเพื่อคำนวณแต้มสะสม
+* `travel.vue` - หน้ารวมประวัติการกิน (Food Delivery), เที่ยวบิน, โรงแรม และการช้อปปิ้งออนไลน์
+* `insights.vue` - หน้าวิเคราะห์เชิงลึก คำนวณช่วงเวลาใช้จ่ายคาร์บอนสูงสุด และแสดง Eco-Warnings
+* `chatbot.vue` - หน้าสำหรับพูดคุยสอบถามแผนลดคาร์บอนชดเชยกับบอท AI
+* `settings.vue` - ส่วนใส่ Gemini API Key, ตัวควบคุมปุ่มจำลอง Simulator และปุ่มรีเซ็ตล้างตาราง Supabase
+
+### 🧩 คอมโพเนนต์แสดงผล (Components)
+* `SidebarNavigation.vue` - แถบนำทางหลักและแสดงสถานะเครือข่ายออนไลน์/ออฟไลน์
+* `HeaderSection.vue` - ส่วนหัวสำหรับควบคุมและแสดงสถานะระบบ Simulator รวมถึงกล่องเลือกผู้ใช้งานบัญชี
+* `ConicChart.vue` - คอมโพเนนต์คำนวณสัดส่วนเปอร์เซ็นต์และแสดงผลเป็นกราฟวงกลม
+* `TrendChart.vue` - คอมโพเนนต์แผนภูมิแท่งเปรียบเทียบยอดการปล่อยคาร์บอนย้อนหลังรายเดือน
+* `ToastContainer.vue` - กล่องข้อความแจ้งเตือนสีเขียวเด้งขึ้นเตือนการปล่อยคาร์บอนเมื่อได้รับเรียลไทม์สตรีมจาก Supabase
+
+### 🧠 ตรรกะการทำงาน (Composables)
+* `useDataManager.ts` - จัดการดึงข้อมูล JSON เริ่มต้นบันทึกสู่ Supabase ในครั้งแรก และทำหน้าที่ Query อ่าน/เขียนตารางผ่าน Supabase Client
+* `useSimulator.ts` - สุ่มทำรายการซื้อของ สั่งอาหาร หรือตั๋วบิน แล้วยิง Insert แถวข้อมูลใหม่ตรงเข้าตาราง Supabase
+* `useInsights.ts` - รับชุดข้อมูลจาก Supabase มาประมวลผลเชิงคาร์บอนและคัดแยกเงื่อนไข Eco-Warnings
+* `useAiService.ts` - ประมวลผลแชตบอท ป้อนบริบทประวัติการปล่อยคาร์บอนของ Supabase ส่งให้ Gemini หรือใช้ฐานข้อมูลแคชภายในเครื่องประมวลผลแทนกรณีออฟไลน์
 
 ---
 
-## 🛠️ โครงสร้างเทคโนโลยี (Tech Stack)
-* **Frontend:** Vanilla HTML5, Modern ECMAScript (ES Modules)
-* **Styling:** Vanilla CSS (เน้น Dark mode, Glassmorphic Glass, CSS variable ดีไซน์)
-* **Build Tool:** Vite (สำหรับการรันเครื่องทดสอบระบบ)
-* **PWA:** Service Worker API & Cache API
-* **AI:** Google Generative AI API (Gemini-2.5-flash)
+## 🗄️ โครงสร้างตารางใน Supabase Database (Supabase Tables)
+
+ตารางหลักที่ซิงก์ข้อมูลร่วมกันใน Supabase:
+* `users` - เก็บข้อมูลผู้ใช้งาน รหัสผู้ใช้ และคะแนนสะสม Eco Points
+* `transactions` - เก็บประวัติรายรับ รายจ่าย หมวดหมู่ และยอดเงินใช้สอย
+* `ecommerce_orders` & `products` - ข้อมูลประวัติการช้อปปิ้งเพื่อวัดระดับวัสดุบรรจุภัณฑ์คาร์บอน
+* `hotel_bookings` & `hotels` - บันทึกคืนพักผ่อนจำแนกตามดาวและขนาดการปล่อยความร้อน
+* `flight_tickets` & `flights` - บันทึกระยะทางบินเปรียบเทียบพิกัดจุดขึ้นลง TG เพื่อคำนวณ CO₂ สูงสุด
+* `food_orders` & `restaurants` - ประวัติการสั่งซื้ออาหารเดลิเวอรี่และประเภทเมนูอาหารสีเขียว
+* `tasks` & `projects` - การเคลียร์ภารกิจแบบออนไลน์เพื่อประหยัดพลังงาน
+* `notifications` - บันทึกการส่ง Eco-Alerts และประวัติเรียลไทม์
