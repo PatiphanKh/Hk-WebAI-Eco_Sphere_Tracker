@@ -33,12 +33,21 @@
         </NuxtLink>
       </nav>
 
-      <div class="mt-auto border-t border-gray-100 pt-6 flex items-center gap-3">
-        <img src="https://via.placeholder.com/40" alt="Admin" class="w-10 h-10 rounded-full" />
-        <div>
-          <p class="font-semibold text-sm text-gray-900">Somchai Jaidee</p>
-          <p class="text-xs text-gray-500">Admin</p>
+      <div class="mt-auto border-t border-gray-100 pt-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <img src="https://via.placeholder.com/40" alt="Admin" class="w-10 h-10 rounded-full" />
+          <div>
+            <p class="font-semibold text-sm text-gray-900">Somchai Jaidee</p>
+            <p class="text-xs text-gray-500">Admin</p>
+          </div>
         </div>
+        <button 
+          @click="handleLogout" 
+          class="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition"
+          title="ออกจากระบบ"
+        >
+          <Icon name="ph:sign-out-bold" class="w-5 h-5" />
+        </button>
       </div>
     </aside>
 
@@ -56,4 +65,10 @@
 
 <script setup>
 const route = useRoute()
+
+const handleLogout = () => {
+  const sessionCookie = useCookie('auth_session')
+  sessionCookie.value = null
+  navigateTo('/login')
+}
 </script>
