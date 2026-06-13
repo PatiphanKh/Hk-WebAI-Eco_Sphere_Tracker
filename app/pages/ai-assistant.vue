@@ -132,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 
 const config = useRuntimeConfig()
 
@@ -146,13 +146,16 @@ const typing = ref(false)
 const messageBox = ref(null)
 const loading = ref(false)
 
-// Supabase details
-const SUPABASE_URL = 'https://fsqqnrjhwjhprsbquqeg.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzcXFucmpod2pocHJzYnF1cWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMjkyMzEsImV4cCI6MjA5NjkwNTIzMX0.5ohCPqG2wjlSc8RFsfAOUbtG1IGVWu_FeiZhMqqWae0'
+// Supabase details from runtime config (with fallback to default if not set in .env)
+const SUPABASE_URL = config.public.supabaseUrl || 'https://fsqqnrjhwjhprsbquqeg.supabase.co'
+const SUPABASE_ANON_KEY = config.public.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzcXFucmpod2pocHJzYnF1cWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMjkyMzEsImV4cCI6MjA5NjkwNTIzMX0.5ohCPqG2wjlSc8RFsfAOUbtG1IGVWu_FeiZhMqqWae0'
 const headers = {
   apikey: SUPABASE_ANON_KEY,
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`
 }
+
+// Compute if engine is online or cloud
+const isOnline = computed(() => engineMode.value === 'online' || engineMode.value === 'cloud')
 
 // User dynamic states
 const selectedUser = ref(null)
@@ -164,7 +167,7 @@ const hotelBookings = ref([])
 const transactions = ref([])
 
 const displayFirstName = computed(() => {
-  if (engineMode.value === 'offline') return 'Somchai'
+  if (!isOnline.value) return 'Somchai'
   if (!selectedUser.value) return 'User'
   return selectedUser.value.name.split(' ')[0]
 })
@@ -176,29 +179,19 @@ const quickPrompts = [
   'สรุปรายงานเดือนนี้ให้หน่อย'
 ]
 
-// Default Message History
-const defaultMessages = [
-  {
-    id: 1,
-    sender: 'ai',
-    text: 'สวัสดีครับ Somchai 👏 ผมคือ Eco AI Assistant จากข้อมูลเดือนมิถุนายน พบว่าการเดินทางของคุณมีการปล่อยคาร์บอนสูงขึ้นเล็กน้อย มีอะไรให้ผมช่วยแนะนำเพื่อลดคาร์บอนไหมครับ?'
-  },
-  {
-    id: 2,
-    sender: 'user',
-    text: 'เดือนนี้ฉันบินไปเชียงใหม่ 2 รอบ อยากรู้ว่าต้องชดเชยคาร์บอนยังไง?'
-  },
-  {
-    id: 3,
-    sender: 'ai',
-    text: `การบินไปเชียงใหม่ 2 รอบ (ไป-กลับ) สร้างคาร์บอนฟุตพริ้นท์ประมาณ 450 kg CO2e ครับ ✈️ คุณสามารถชดเชยได้โดย:
-• บริจาคสนับสนุนโครงการปลูกป่า (ประมาณ 15 ต้น) 🌲
-• เลือกซื้อคาร์บอนเครดิตผ่านแอปพลิเคชันพันธมิตรของเรา
-• ปรับลดการบริโภคเนื้อแดงในสัปดาห์หน้า`
-  }
-]
+// Initial greeting generator
+const initGreeting = () => {
+  const name = displayFirstName.value
+  messages.value = [
+    {
+      id: Date.now(),
+      sender: 'ai',
+      text: `สวัสดีครับคุณ ${name} 🌲 ยินดีต้อนรับสู่ Eco AI Assistant ครับ! ผมพร้อมช่วยคุณวิเคราะห์ข้อมูลคาร์บอนฟุตพริ้นท์สะสม รวมถึงแนะนำแนวทางรักษ์โลกที่เหมาะกับไลฟ์สไตล์ของคุณ วันนี้อยากให้ผมช่วยในเรื่องไหนเป็นพิเศษไหมครับ?`
+    }
+  ]
+}
 
-const messages = ref([...defaultMessages])
+const messages = ref([])
 
 // Auto scroll helper
 const scrollToBottom = () => {
@@ -211,7 +204,7 @@ const scrollToBottom = () => {
 
 // Clear chat history
 const clearChat = () => {
-  messages.value = []
+  initGreeting()
   scrollToBottom()
 }
 
@@ -317,7 +310,8 @@ const generateAIResponse = async (userText) => {
   scrollToBottom()
 
   // 1. Check if Gemini API key is configured
-  if (!geminiApiKey.value) {
+  const apiKey = geminiApiKey.value || config.public.geminiApiKey
+  if (!apiKey) {
     setTimeout(() => {
       typing.value = false
       messages.value.push({
@@ -333,14 +327,88 @@ const generateAIResponse = async (userText) => {
   try {
     // 2. Prepare system context prompt with active user metrics
     const name = displayFirstName.value
-    const total = engineMode.value === 'online' ? calculations.value.totalCO2 : 342.8
-    const flight = engineMode.value === 'online' ? calculations.value.co2Flight : 195.2
-    const travel = engineMode.value === 'online' ? calculations.value.co2Travel : 68.5
-    const shop = engineMode.value === 'online' ? calculations.value.co2Shopping : 51.4
-    const food = engineMode.value === 'online' ? calculations.value.co2Food : 27.7
-    const highest = engineMode.value === 'online' ? calculations.value.highestCategory : 'การบิน'
-    const pts = engineMode.value === 'online' ? calculations.value.loyaltyPoints : 1240
+    const total = isOnline.value ? calculations.value.totalCO2 : 342.8
+    const flight = isOnline.value ? calculations.value.co2Flight : 195.2
+    const travel = isOnline.value ? calculations.value.co2Travel : 68.5
+    const shop = isOnline.value ? calculations.value.co2Shopping : 51.4
+    const food = isOnline.value ? calculations.value.co2Food : 27.7
+    const highest = isOnline.value ? calculations.value.highestCategory : 'การบิน'
+    const pts = isOnline.value ? calculations.value.loyaltyPoints : 1240
     const level = pts < 1500 ? 'มือใหม่รักษ์โลก 🌱' : 'ผู้พิทักษ์โลก 🌳'
+
+    // Format detailed Supabase records to supply as context for AI
+    let databaseContext = ''
+    if (isOnline.value) {
+      databaseContext += `\n[ข้อมูลจริงประวัติกิจกรรมและการปล่อยคาร์บอนของผู้ใช้จาก Supabase Database]:\n`
+      databaseContext += `- ชื่อผู้ใช้: ${selectedUser.value?.name || 'ไม่ระบุ'}\n`
+      databaseContext += `- คะแนนสะสม: ${pts} คะแนน (${level})\n`
+
+      // Flights details
+      if (flightTickets.value.length > 0) {
+        databaseContext += `- เที่ยวบินสะสม:\n`
+        flightTickets.value.forEach(t => {
+          if (t.status !== 'CANCELLED') {
+            const flightDate = t.flights?.departure_time ? new Date(t.flights.departure_time).toLocaleDateString('th-TH') : 'ไม่ระบุ'
+            databaseContext += `  • เที่ยวบิน ${t.flights?.origin || 'BKK'} ไป ${t.flights?.destination || 'CNX'} (${t.flights?.airline || ''}) วันที่ ${flightDate}, คาร์บอน: 234.5 kg CO2, สถานะ: ${t.status}\n`
+          }
+        })
+      }
+
+      // Hotels details
+      if (hotelBookings.value.length > 0) {
+        databaseContext += `- การพักโรงแรม/ที่พัก:\n`
+        hotelBookings.value.forEach(b => {
+          if (b.status !== 'CANCELLED') {
+            const checkInDate = new Date(b.check_in).toLocaleDateString('th-TH')
+            const nights = Math.ceil(Math.abs(new Date(b.check_out) - new Date(b.check_in)) / (1000 * 60 * 60 * 24)) || 1
+            databaseContext += `  • โรงแรม ${b.hotels?.name || 'โรงแรม'} (${b.hotels?.location || ''}), เข้าพัก ${checkInDate} จำนวน ${nights} คืน, คาร์บอน: ${nights * 12.0} kg CO2, สถานะ: ${b.status}\n`
+          }
+        })
+      }
+
+      // Ecommerce details
+      if (ecommerceOrders.value.length > 0) {
+        databaseContext += `- การซื้อสินค้าออนไลน์ (E-commerce):\n`
+        ecommerceOrders.value.forEach(o => {
+          if (o.status !== 'CANCELLED') {
+            const orderDate = new Date(o.timestamp).toLocaleDateString('th-TH')
+            const items = o.items || []
+            let itemDetails = []
+            items.forEach(i => {
+              const prod = productsMap.value[i.product_id]
+              if (prod) {
+                itemDetails.push(`${prod.name} (หมวดหมู่: ${prod.category}, จำนวน: ${i.qty})`)
+              } else {
+                itemDetails.push(`สินค้ารหัส ${i.product_id} (จำนวน: ${i.qty})`)
+              }
+            })
+            databaseContext += `  • คำสั่งซื้อวันที่ ${orderDate}: ${itemDetails.join(', ')}, สถานะ: ${o.status}\n`
+          }
+        })
+      }
+
+      // Food details
+      if (foodOrders.value.length > 0) {
+        databaseContext += `- คำสั่งซื้ออาหารเดลิเวอรี:\n`
+        foodOrders.value.forEach(o => {
+          if (o.status !== 'CANCELLED') {
+            const menuItems = o.menu_items || []
+            databaseContext += `  • ร้าน ${o.restaurants?.name || 'ร้านอาหาร'} (${o.restaurants?.cuisine || ''}): เมนู [${menuItems.join(', ')}], ราคารวม: ฿${o.total_price || 0}, สถานะ: ${o.status}\n`
+          }
+        })
+      }
+
+      // Transactions details
+      if (transactions.value.length > 0) {
+        databaseContext += `- รายการธุรกรรมการเงิน:\n`
+        transactions.value.forEach(tx => {
+          const txDate = new Date(tx.date).toLocaleDateString('th-TH')
+          databaseContext += `  • ประเภท: ${tx.type}, หมวดหมู่: ${tx.category}, ยอดเงิน: ฿${tx.amount.toLocaleString()}, โน้ต: ${tx.note || 'ไม่มี'}, วันที่: ${txDate}\n`
+        })
+      }
+    } else {
+      databaseContext += `\n(หมายเหตุ: ปัจจุบันเปิดโหมดออฟไลน์ ข้อมูลประวัติเที่ยวบิน/สินค้า เป็นข้อมูลเริ่มต้นจำลองคาร์บอนรวมสะสม 342.8 kg CO2)\n`
+    }
 
     const systemPrompt = `คุณคือ Eco AI Assistant ผู้เชี่ยวชาญด้านคาร์บอนฟุตพริ้นท์และการอนุรักษ์สิ่งแวดล้อม
 ข้อมูลและคาร์บอนฟุตพริ้นท์สะสมของผู้ใช้ปัจจุบัน (${name}):
@@ -351,14 +419,17 @@ const generateAIResponse = async (userText) => {
 - คาร์บอนอาหาร: ${food} kg
 - คะแนนสิ่งแวดล้อมสะสม: ${pts} pts (ระดับ: ${level})
 - หมวดหมู่ที่ปล่อยคาร์บอนสูงที่สุด: ${highest}
+${databaseContext}
 
-กติกาในการตอบแชท:
-1. กรุณาตอบคำถามเป็นภาษาไทย ด้วยน้ำเสียงสุภาพ เป็นมิตร และสร้างแรงบันดาลใจในการรักษาสิ่งแวดล้อม
-2. อ้างอิงตัวเลขคาร์บอนและหมวดหมู่ต่างๆ ของผู้ใช้นี้เสมอเพื่อให้การวิเคราะห์ตรงกับผู้ใช้
-3. เสนอวิธีลดคาร์บอนฟุตพริ้นท์ที่ทำได้จริง เช่น ปั่นจักรยาน (ลด 2.5kg CO2), ทานอาหารมังสวิรัติ (ลด 6.8kg CO2), เลือกสินค้าประเภทรีไซเคิล หรือลดไฟล์ตบิน`
+กติกาในการตอบแชทเพื่อให้ดูเป็นธรรมชาติและเป็นกันเอง:
+1. ตอบคำถามอย่างเป็นธรรมชาติ เป็นกันเอง มีความกระตือรือร้นและใส่ใจในสิ่งแวดล้อม
+2. ใช้ภาษาไทยที่ลื่นไหลเป็นกันเอง (เช่น มีการทักทายอย่างอบอุ่น ใช้คำพูดเช่น "ผมดีใจมากเลยครับที่ได้คุยด้วย", "จากข้อมูลตรงนี้พบว่า...") หลีกเลี่ยงภาษาที่ดูแข็งทื่อเป็นหุ่นยนต์หรือแปลมาจากภาษาอังกฤษตรงตัว
+3. อ้างอิงถึงข้อมูลดิบใน Supabase เมื่อมีคำถามที่เกี่ยวข้องโดยนำข้อมูลมาเล่าประกอบบทสนทนาอย่างกลมกลืน (ไม่จำเป็นต้องกางสถิติทุกอย่างออกมาเว้นแต่ผู้ใช้จะขอให้สรุปรายงาน)
+4. หากพบกิจกรรมที่ลดคาร์บอนได้ดีหรือคะแนนสะสมสูง ให้กล่าวชื่นชมสนับสนุนเชิงบวก
+5. แนะนำแนวทางลดคาร์บอนที่จับต้องได้และทำได้จริงเป็นข้อๆ อย่างเป็นมิตรและสร้างสรรค์`
 
-    // 3. Request Gemini API (gemini-1.5-flash)
-    const response = await $fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey.value}`, {
+    // 3. Request Gemini API (gemini-3.5-flash)
+    const response = await $fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       body: {
         contents: [
@@ -412,7 +483,7 @@ const fetchProducts = async () => {
 
 // Fetch user dynamic data
 const fetchUserData = async () => {
-  if (engineMode.value !== 'online') return
+  if (!isOnline.value) return
   loading.value = true
   try {
     const [userRes, flightsRes, hotelsRes, ecommerceRes, foodRes, txsRes] = await Promise.all([
@@ -437,12 +508,29 @@ const fetchUserData = async () => {
   }
 }
 
+// Watch for changes in user or engine mode to trigger data reload
+watch([selectedUserId, engineMode], async () => {
+  if (isOnline.value) {
+    await fetchUserData()
+  } else {
+    // Reset data back to default/empty offline mode values
+    selectedUser.value = null
+    flightTickets.value = []
+    hotelBookings.value = []
+    ecommerceOrders.value = []
+    foodOrders.value = []
+    transactions.value = []
+  }
+  initGreeting()
+})
+
 onMounted(async () => {
   geminiApiKey.value = config.public.geminiApiKey || ''
   await fetchProducts()
-  if (engineMode.value === 'online') {
+  if (isOnline.value) {
     await fetchUserData()
   }
+  initGreeting()
   scrollToBottom()
 })
 </script>

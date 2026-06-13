@@ -8,7 +8,9 @@ export default defineNuxtConfig({
   ],
   runtimeConfig: {
     public: {
-      geminiApiKey: process.env.GEMINI_API_KEY || ''
+      geminiApiKey: process.env.GEMINI_API_KEY || '',
+      supabaseUrl: process.env.SUPABASE_URL || '',
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
     }
   }
 })

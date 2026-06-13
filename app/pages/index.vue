@@ -307,7 +307,7 @@ const toggleEngine = () => {
 
 // Interactive states
 const bikeLogged = ref(false)
-const offsetBought = ref(false)
+const offsetBought = useState('offset_bought', () => false)
 
 const logBikeActivity = () => {
   bikeLogged.value = true
@@ -375,6 +375,8 @@ const loadUserData = async () => {
   if (engineMode.value !== 'online') return
   loading.value = true
   error.value = null
+  bikeLogged.value = false
+  offsetBought.value = false
   try {
     const [userRes, flightsRes, hotelsRes, ecommerceRes, foodRes, txsRes] = await Promise.all([
       $fetch(`${SUPABASE_URL}/rest/v1/users?user_id=eq.${selectedUserId.value}`, { headers }),
