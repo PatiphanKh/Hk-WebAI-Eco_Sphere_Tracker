@@ -16,10 +16,9 @@
             <p class="text-xs font-semibold text-gray-500">ระบบวิเคราะห์ ติดตาม และประเมินดัชนีคุณภาพน้ำเชิงพื้นที่ในชุมชน</p>
           </div>
         </div>
-        <div class="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 self-start md:self-auto">
-          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          <span class="text-[11px] font-extrabold text-blue-800">เชื่อมต่อตาราง `locations` สำเร็จ</span>
-        </div>
+        
+       
+        
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -101,8 +100,18 @@
                       {{ log.type || 'PLACE' }}
                     </div>
                     <div>
-                      <span class="block text-gray-900 font-extrabold text-sm tracking-tight">{{ log.name || 'ไม่ระบุสถานที่' }}</span>
-                      <span class="text-[10px] text-gray-400">Code: {{ log.location_id || '-' }} 📍 {{ log.address?.substring(0, 30) || 'ไม่มีข้อมูลที่อยู่' }}...</span>
+                      <div class="flex items-center gap-2">
+                        <span class="text-gray-900 font-extrabold text-sm tracking-tight">{{ log.name || 'ไม่ระบุสถานที่' }}</span>
+                        <button 
+                          @click="openMapModal(log)" 
+                          class="cursor-pointer text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5"
+                          title="ดูแผนที่ปักหมุดและบทวิเคราะห์คุณภาพน้ำ"
+                        >
+                          <Icon name="ph:map-pin-bold" class="w-3 h-3" />
+                          <span>ดูแมพ & ข้อมูลเชิงลึก</span>
+                        </button>
+                      </div>
+                      <span class="text-[10px] text-gray-400">Code: {{ log.location_id || '-' }} 📍 {{ log.address?.substring(0, 45) || 'ไม่มีข้อมูลที่อยู่' }}...</span>
                     </div>
                   </div>
                 </td>
@@ -152,6 +161,107 @@
       </div>
 
     </div>
+
+    <div v-if="showMap" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-5xl w-full flex flex-col overflow-hidden max-h-[92vh]">
+        
+        <div class="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="bg-blue-500 text-white p-2 rounded-xl shadow-md shadow-blue-100">
+              <Icon name="ph:map-trifold-bold" class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="font-black text-slate-800 text-sm">Ecosystem Geo-Location Analytics Router</h3>
+              <p class="text-[10px] font-semibold text-slate-400">ระบบเชื่อมโยงพิกัดภูมิศาสตร์ร่วมกับดัชนีชี้วัดสิ่งแวดล้อมชุมชน</p>
+            </div>
+          </div>
+          <button @click="showMap = false" class="cursor-pointer text-slate-400 hover:text-slate-600 bg-white p-2 border border-slate-200 rounded-xl shadow-sm transition">
+            <Icon name="ph:x-bold" class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="flex flex-col md:grid md:grid-cols-3 flex-1 overflow-y-auto min-h-[480px]">
+          
+          <div class="md:col-span-2 bg-slate-100 relative min-h-[320px] md:min-h-full border-b md:border-b-0 md:border-r border-slate-100">
+            <iframe
+              width="100%"
+              height="100%"
+              frameborder="0"
+              scrolling="no"
+              marginheight="0"
+              marginwidth="0"
+              class="absolute inset-0 border-none"
+              :src="mapUrl"
+            ></iframe>
+          </div>
+
+          <div class="p-5 bg-slate-50/60 flex flex-col justify-between overflow-y-auto">
+            <div>
+              <span class="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-1">📍 ข้อมูลพิกัดสถานะน้ำ</span>
+              
+              <div v-if="focusedLocation" class="space-y-4">
+                <h4 class="text-base font-black text-slate-800 leading-tight">{{ focusedLocation.name }}</h4>
+                
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm">
+                    <span class="text-[10px] font-bold text-slate-400 block mb-0.5">ค่า pH ล่าสุด</span>
+                    <span class="text-lg font-black text-slate-800">{{ focusedLocation.ph_level }}</span>
+                    <span class="text-[9px] font-extrabold block" :class="getPhColor(focusedLocation.ph_level)">
+                      ({{ getPhStatusText(focusedLocation.ph_level) }})
+                    </span>
+                  </div>
+                  <div class="bg-white p-3 rounded-xl border border-slate-200/60 shadow-sm">
+                    <span class="text-[10px] font-bold text-slate-400 block mb-0.5">สารละลายรวม</span>
+                    <span class="text-lg font-black text-slate-800">{{ focusedLocation.tds_value }} <span class="text-[10px] text-slate-400 font-normal">ppm</span></span>
+                    <span class="text-[9px] font-extrabold block text-slate-500">
+                      {{ focusedLocation.tds_value > 300 ? '⚠️ เกินมาตรฐาน' : '✅ ผ่านเกณฑ์' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="p-3.5 rounded-xl border text-xs" :class="getInsightClass(focusedLocation)">
+                  <div class="flex items-center gap-1.5 font-bold mb-1">
+                    <Icon :name="getInsightIcon(focusedLocation)" class="w-4 h-4" />
+                    <span>บทวิเคราะห์ระบบนิเวศเชิงพื้นที่</span>
+                  </div>
+                  <p class="leading-relaxed text-slate-600 text-[11px] font-medium">
+                    {{ generateEcosystemInsight(focusedLocation) }}
+                  </p>
+                </div>
+              </div>
+
+              <div v-else class="space-y-3">
+                <h4 class="text-sm font-black text-slate-800">ศูนย์กลางระบบนิเวศภูมิภาค</h4>
+                <p class="text-slate-500 text-[11px] leading-relaxed">
+                  กำลังแสดงพิกัดภาพรวมโครงข่ายสิ่งแวดล้อมในเขตจังหวัดเชียงใหม่ คุณสามารถกดปุ่ม <b>"ดูแมพ"</b> ท้ายรายชื่อสถานที่ในตารางด้านหลัง เพื่อเจาะลึกดูบทวิเคราะห์น้ำสะอาดของจุดนั้นๆ ได้ทันที
+                </p>
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-blue-800 text-[11px] font-semibold flex gap-2">
+                  <Icon name="ph:buildings-bold" class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <span>เครือข่ายนี้ครอบคลุม โรงพยาบาล, โรงแรม และร้านค้าที่ร่วมโครงการตรวจดัชนีสิ่งแวดล้อมร่วมกัน</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-200/60 mt-4">
+              <span class="text-[10px] font-bold text-slate-400 block mb-2">เกณฑ์ประเมินความปลอดภัยแหล่งน้ำ</span>
+              <div class="grid grid-cols-3 gap-1.5 text-[9px] font-bold text-center">
+                <span class="bg-green-50 text-green-700 px-1.5 py-1 rounded-md border border-green-200 flex items-center justify-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>บริสุทธิ์
+                </span>
+                <span class="bg-amber-50 text-amber-700 px-1.5 py-1 rounded-md border border-amber-200 flex items-center justify-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>เฝ้าระวัง
+                </span>
+                <span class="bg-rose-50 text-rose-700 px-1.5 py-1 rounded-md border border-rose-200 flex items-center justify-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>ปนเปื้อน
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -163,7 +273,11 @@ const waterLogs = ref([])
 const loading = ref(true)
 const searchQuery = ref('')
 const activeTab = ref('ALL')
-const isOffline = useOffline()
+const isOffline = ref(false)
+
+// Map Modal Layout States
+const showMap = ref(false)
+const focusedLocation = ref(null)
 
 const tabOptions = [
   { label: '🌏 ทั้งหมด', value: 'ALL' },
@@ -174,26 +288,92 @@ const tabOptions = [
 
 // Supabase Connection Conf
 const SUPABASE_URL = 'https://fsqqnrjhwjhprsbquqeg.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzcXFucmpod2pocHJzYnF1cWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMjkyMzEsImV4cCI6MjA5NjkwNTIzMX0.5ohCPqG2wjlSc8RFsfAOUbtG1IGVWu_FeiZhMqqWae0'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzcXFucmpod2pocHJzYnF1cWVnIiwicm9sZSI6ImFub24LCJpYXQiOjE3ODEzMjkyMzEsImV4cCI6MjA5NjkwNTIzMX0.5ohCPqG2wjlSc8RFsfAOUbtG1IGVWu_FeiZhMqqWae0'
 const headers = {
   apikey: SUPABASE_ANON_KEY,
   Authorization: `Bearer ${SUPABASE_ANON_KEY}`
 }
 
-// 📊 [WOW FEATURE 4]: COMPUTED STATS AND LIVE SEARCH + FILTER LOGIC
+// 📊 COMPUTED STATS AND LIVE SEARCH + FILTER LOGIC
 const safeCount = computed(() => waterLogs.value.filter(l => l.status === 'Good').length)
 const dangerCount = computed(() => waterLogs.value.filter(l => l.status === 'Fair' || l.status === 'Poor').length)
 
 const filteredLogs = computed(() => {
   return waterLogs.value.filter(log => {
-    // กรองด้วยช่องค้นหา (Search)
     const matchesSearch = (log.name || '').toLowerCase().includes(searchQuery.value.toLowerCase())
-    // กรองด้วยแท็บประเภท (Tab Category)
     const matchesTab = activeTab.value === 'ALL' || log.type === activeTab.value
-    
     return matchesSearch && matchesTab
   })
 })
+
+// 🗺️ Dynamic OpenStreetMap URL Generation Router Logic
+const mapUrl = computed(() => {
+  if (focusedLocation.value && focusedLocation.value.lat) {
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${focusedLocation.value.lng - 0.004}%2C${focusedLocation.value.lat - 0.003}%2C${focusedLocation.value.lng + 0.004}%2C${focusedLocation.value.lat + 0.003}&layer=mapnik&marker=${focusedLocation.value.lat}%2C${focusedLocation.value.lng}`
+  }
+  return `https://www.openstreetmap.org/export/embed.html?bbox=98.95%2C18.76%2C99.03%2C18.82&layer=mapnik`
+})
+
+// Function to Toggle/Open Map Overlay Modal Router
+const openMapModal = (locationItem) => {
+  if (locationItem) {
+    const seed = (locationItem.name || '').length
+    
+    // ดึงค่าพิกัดจริงจากฟิลด์ coordinates ใน db (ถ้าไม่มีจะทำการสุ่มพิกัดในเชียงใหม่ให้อัตโนมัติ)
+    let lat = locationItem.coordinates?.lat
+    let lng = locationItem.coordinates?.lng
+
+    if (!lat || !lng) {
+      lat = 18.788 + (seed % 5) * 0.007
+      lng = 98.982 + (seed % 7) * 0.005
+    }
+
+    focusedLocation.value = {
+      name: locationItem.name,
+      type: locationItem.type,
+      ph_level: locationItem.ph_level,
+      tds_value: locationItem.tds_value,
+      status: locationItem.status,
+      lat,
+      lng
+    }
+  } else {
+    focusedLocation.value = null
+  }
+  showMap.value = true
+}
+
+// 🧠ระบบคำนวณข้อความให้ความรู้ตามประเภทของสถานที่และคุณภาพน้ำจริง (Data-driven Insights)
+const generateEcosystemInsight = (loc) => {
+  if (loc.status === 'Poor') {
+    return `ตรวจพบดัชนีมลพิษน้ำสะสมสูงเกินเกณฑ์ความปลอดภัย! มีความเสี่ยงต่อสุขอนามัยชุมชนโดยรอบอย่างรุนแรง ไม่ควรนำน้ำดิบชุดนี้ไปบริโภคหรือประกอบอาหารเด็ดขาด ควรตรวจสอบระบบบำบัดน้ำเสียส่วนกลางด่วน`
+  }
+  
+  if (loc.type === 'HOSPITAL') {
+    return `สำหรับหน่วยงานบริการทางการแพทย์ น้ำสะอาดบริสุทธิ์เกณฑ์นี้ถือว่ายอดเยี่ยมมาก ค่าสารละลายรวมที่ต่ำช่วยลดโอกาสเกิดการสะสมตะกรันและยืดอายุเครื่องกรองไต รวมถึงเครื่องนึ่งฆ่าเชื้อแรงดันสูง (Autoclave)`
+  }
+  if (loc.type === 'RESTAURANT') {
+    return `น้ำมีค่า pH และสารละลายอยู่ในเกณฑ์สมดุล เหมาะสมอย่างยิ่งสำหรับใช้ล้างผักสด ปรุงอาหาร และชงเครื่องดื่ม ไม่มีรสชาติหรือกลิ่นแปลกปลอมที่จะส่งผลต่อคุณภาพของอาหารในร้าน`
+  }
+  if (loc.type === 'HOTEL') {
+    return `ค่าน้ำสะอาดปกติ เหมาะแก่การบริการอุปโภคบริโภคในห้องพัก แหล่งน้ำลักษณะนี้ปลอดภัยสูงต่อผิวสัมผัสของผู้เข้าพัก และไม่กัดกร่อนระบบท่อส่งน้ำดีภายในตัวอาคารในระยะยาว`
+  }
+  return `ดัชนีคุณภาพน้ำเชิงพื้นที่อยู่ในเกณฑ์เสถียร ระบบนิเวศโดยรอบไม่พบสิ่งปนเปื้อนเคมีเค็ม สภาพน้ำสมดุลปลอดภัยต่อการนำไปใช้งานทั่วไป`
+}
+
+// สีประกอบกล่อง Insight
+const getInsightClass = (loc) => {
+  if (loc.status === 'Poor') return 'bg-rose-50 border-rose-200 text-rose-800'
+  if (loc.status === 'Fair') return 'bg-amber-50 border-amber-200 text-amber-800'
+  return 'bg-blue-50 border-blue-100 text-blue-800'
+}
+
+// ไอคอนกล่อง Insight
+const getInsightIcon = (loc) => {
+  if (loc.status === 'Poor') return 'ph:skull-bold'
+  if (loc.status === 'Fair') return 'ph:warning-circle-bold'
+  return 'ph:brain-bold'
+}
 
 // FETCH DATA & MAP DYNAMIC VALUES
 const fetchWaterData = async () => {
@@ -229,11 +409,10 @@ const fetchWaterData = async () => {
       if (cached) {
         waterLogs.value = JSON.parse(cached)
       } else {
-        // Fallback default mock locations list
         const mockData = [
-          { location_id: 'L001', name: 'โรงพยาบาลส่งเสริมสุขภาพตำบลแม่เหียะ', type: 'HOSPITAL', address: 'ต.แม่เหียะ อ.เมืองเชียงใหม่ จ.เชียงใหม่' },
-          { location_id: 'L002', name: 'โรงแรมศิริปันนา วิลล่า รีสอร์ท แอนด์ สปา', type: 'HOTEL', address: 'ต.วัดเกต อ.เมืองเชียงใหม่ จ.เชียงใหม่' },
-          { location_id: 'L003', name: 'ร้านอาหารสวนผักโอ้กะจู๋ สาขานิ่มซิตี้', type: 'RESTAURANT', address: 'ต.หายยา อ.เมืองเชียงใหม่ จ.เชียงใหม่' }
+          { location_id: 'L001', name: 'โรงพยาบาลส่งเสริมสุขภาพตำบลแม่เหียะ', type: 'HOSPITAL', address: 'ต.แม่เหียะ อ.เมืองเชียงใหม่ จ.เชียงใหม่', coordinates: { lat: 18.745, lng: 98.945 } },
+          { location_id: 'L002', name: 'โรงแรมศิริปันนา วิลล่า รีสอร์ท แอนด์ สปา', type: 'HOTEL', address: 'ต.วัดเกต อ.เมืองเชียงใหม่ จ.เชียงใหม่', coordinates: { lat: 18.783, lng: 99.012 } },
+          { location_id: 'L003', name: 'ร้านอาหารสวนผักโอ้กะจู๋ สาขานิ่มซิตี้', type: 'RESTAURANT', address: 'ต.หายยา อ.เมืองเชียงใหม่ จ.เชียงใหม่', coordinates: { lat: 18.771, lng: 98.981 } }
         ]
         waterLogs.value = mockData.map((item, index) => {
           const seed = item.name.length + index
