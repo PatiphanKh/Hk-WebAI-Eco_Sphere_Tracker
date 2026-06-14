@@ -14,12 +14,12 @@
       </div>
 
       <!-- Quick Navigation Tabs -->
-      <div class="flex gap-1.5 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-full md:w-auto">
+      <div class="flex gap-1.5 bg-gray-50 p-1.5 rounded-xl border border-gray-200 w-full md:w-auto overflow-x-auto scrollbar-none flex-nowrap">
         <button 
           v-for="t in tabs" 
           :key="t.id"
           @click="activeTab = t.id"
-          class="flex-1 md:flex-none text-xs font-bold px-4 py-2.5 rounded-lg transition-all flex items-center justify-center gap-1.5"
+          class="flex-1 md:flex-none text-xs font-bold px-4 py-2.5 rounded-lg transition-all flex items-center justify-center gap-1.5 flex-shrink-0"
           :class="activeTab === t.id 
             ? 'bg-[#1b4332] text-white shadow-sm' 
             : 'text-gray-600 hover:text-emerald-950 hover:bg-gray-100'"
@@ -1277,5 +1277,15 @@ input[type="range"]::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 </style>
