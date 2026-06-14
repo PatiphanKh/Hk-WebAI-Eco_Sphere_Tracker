@@ -28,8 +28,10 @@
           @click="selectProfile(user)"
           class="bg-white p-5 rounded-2xl border border-gray-100/80 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-pointer flex gap-4 items-center"
         >
-          <!-- Avatar -->
-          <img :src="user.avatar" class="w-14 h-14 rounded-full border border-gray-200 object-cover flex-shrink-0" alt="Avatar" />
+          <!-- User Icon -->
+          <div class="w-14 h-14 rounded-full bg-gradient-to-br from-green-100 to-emerald-200 border border-green-200 flex items-center justify-center flex-shrink-0">
+            <Icon name="ph:user-bold" class="w-7 h-7 text-green-700" />
+          </div>
           
           <!-- Details -->
           <div class="flex-grow">
@@ -107,20 +109,10 @@ const fetchUsersList = async () => {
     isOffline.value = false
     
     if (data && data.length > 0) {
-      users.value = data.map((u, index) => {
-        const avatars = [
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', // Somchai
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', // Alice
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', // Mana
-          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', // Somsri
-          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', // John
-          'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'  // Prasit
-        ]
-        
+      users.value = data.map((u) => {
         let pts = u.loyalty_points || 0
         let co2Level = 'Low'
         let co2Progress = 20
-        let name = u.name
 
         // Dynamic calculation for all users based on their points
         if (pts > 2000) {
@@ -136,11 +128,10 @@ const fetchUsersList = async () => {
 
         return {
           user_id: u.user_id,
-          name: name,
+          name: u.name,
           pts: pts,
           co2Level: co2Level,
-          co2Progress: co2Progress,
-          avatar: avatars[index % avatars.length]
+          co2Progress: co2Progress
         }
       })
     }
@@ -150,9 +141,9 @@ const fetchUsersList = async () => {
     
     // Offline local fallback mockup (exact match to design)
     users.value = [
-      { user_id: 'u001', name: 'Somchai Jaidee', pts: 1248, co2Level: 'Moderate', co2Progress: 60, avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' },
-      { user_id: 'u002', name: 'Alice Green', pts: 858, co2Level: 'Low', co2Progress: 25, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' },
-      { user_id: 'u005', name: 'Wichai Nilsuwan', pts: 2188, co2Level: 'High', co2Progress: 90, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' }
+      { user_id: 'u001', name: 'Somchai Jaidee', pts: 1248, co2Level: 'Moderate', co2Progress: 60 },
+      { user_id: 'u002', name: 'Alice Green', pts: 858, co2Level: 'Low', co2Progress: 25 },
+      { user_id: 'u005', name: 'Wichai Nilsuwan', pts: 2188, co2Level: 'High', co2Progress: 90 }
     ]
   } finally {
     loading.value = false

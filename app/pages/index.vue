@@ -265,15 +265,119 @@
       </div>
     </template>
   </ClientOnly>
+
+  <!-- Toast Notification Container -->
+  <Teleport to="body">
+    <div class="fixed top-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none" style="max-width: 360px; width: 100%;">
+      <TransitionGroup name="toast">
+        <div
+          v-for="toast in toasts"
+          :key="toast.id"
+          class="pointer-events-auto w-full rounded-2xl shadow-xl border flex items-start gap-3.5 p-4 backdrop-blur-md"
+          :class="{
+            'bg-emerald-50/95 border-emerald-200': toast.type === 'success',
+            'bg-blue-50/95 border-blue-200': toast.type === 'info',
+            'bg-amber-50/95 border-amber-200': toast.type === 'warning',
+            'bg-red-50/95 border-red-200': toast.type === 'error'
+          }"
+        >
+          <!-- Icon Badge -->
+          <div
+            class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            :class="{
+              'bg-emerald-100 text-emerald-700': toast.type === 'success',
+              'bg-blue-100 text-blue-700': toast.type === 'info',
+              'bg-amber-100 text-amber-700': toast.type === 'warning',
+              'bg-red-100 text-red-700': toast.type === 'error'
+            }"
+          >
+            <Icon :name="toast.icon" class="w-5 h-5" />
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 min-w-0">
+            <p
+              class="text-xs font-black"
+              :class="{
+                'text-emerald-900': toast.type === 'success',
+                'text-blue-900': toast.type === 'info',
+                'text-amber-900': toast.type === 'warning',
+                'text-red-900': toast.type === 'error'
+              }"
+            >{{ toast.title }}</p>
+            <p
+              class="text-[11px] font-medium mt-0.5 leading-relaxed"
+              :class="{
+                'text-emerald-700': toast.type === 'success',
+                'text-blue-700': toast.type === 'info',
+                'text-amber-700': toast.type === 'warning',
+                'text-red-700': toast.type === 'error'
+              }"
+            >{{ toast.message }}</p>
+          </div>
+
+          <!-- Close Button -->
+          <button
+            @click="removeToast(toast.id)"
+            class="flex-shrink-0 opacity-50 hover:opacity-100 transition"
+            :class="{
+              'text-emerald-700': toast.type === 'success',
+              'text-blue-700': toast.type === 'info',
+              'text-amber-700': toast.type === 'warning',
+              'text-red-700': toast.type === 'error'
+            }"
+          >
+            <Icon name="ph:x-bold" class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Progress Bar -->
+          <div class="absolute bottom-0 left-0 h-0.5 rounded-b-2xl transition-all duration-100"
+            :class="{
+              'bg-emerald-400': toast.type === 'success',
+              'bg-blue-400': toast.type === 'info',
+              'bg-amber-400': toast.type === 'warning',
+              'bg-red-400': toast.type === 'error'
+            }"
+            :style="{ width: toast.progress + '%' }"
+          />
+        </div>
+      </TransitionGroup>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, reactive } from 'vue'
 
 // shared state with layout
 const isOffline = useOffline()
 const supabase = useSupabaseClient()
 let realtimeChannel = null
+
+// Toast Notification System
+const toasts = ref([])
+let toastCounter = 0
+
+const showToast = (type, icon, title, message, duration = 4000) => {
+  const id = ++toastCounter
+  const toast = reactive({ id, type, icon, title, message, progress: 100 })
+  toasts.value.push(toast)
+
+  const startTime = Date.now()
+  const interval = setInterval(() => {
+    const elapsed = Date.now() - startTime
+    toast.progress = Math.max(0, 100 - (elapsed / duration) * 100)
+    if (elapsed >= duration) {
+      clearInterval(interval)
+      removeToast(id)
+    }
+  }, 50)
+}
+
+const removeToast = (id) => {
+  const idx = toasts.value.findIndex(t => t.id === id)
+  if (idx !== -1) toasts.value.splice(idx, 1)
+}
 
 // Interactive states
 const bikeLogged = ref(false)
@@ -327,9 +431,15 @@ const logBikeActivity = async () => {
     })
     
     bikeLogged.value = true
+    showToast(
+      'success',
+      'ph:bicycle-bold',
+      '🚴 บันทึกกิจกรรมสำเร็จ!',
+      'ปั่นจักรยานไปทำงาน ลดคาร์บอน -2.5 kg และได้รับ +100 Eco Points'
+    )
   } catch (err) {
     console.error('Error saving bike activity:', err)
-    alert('เกิดข้อผิดพลาดในการบันทึกกิจกรรม กรุณาลองใหม่อีกครั้ง')
+    showToast('error', 'ph:warning-bold', 'เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกกิจกรรมได้ กรุณาลองใหม่อีกครั้ง')
   } finally {
     loading.value = false
   }
@@ -374,9 +484,15 @@ const buyOffset = async () => {
     })
     
     offsetBought.value = true
+    showToast(
+      'info',
+      'ph:leaf-bold',
+      '🌿 ซื้อคาร์บอนเครดิตสำเร็จ!',
+      'ชดเชยการปล่อยคาร์บอน -200 kg และได้รับ +500 Eco Points จากโครงการปลูกป่าชุมชน'
+    )
   } catch (err) {
     console.error('Error saving offset activity:', err)
-    alert('เกิดข้อผิดพลาดในการซื้อคาร์บอนเครดิตชดเชย กรุณาลองใหม่อีกครั้ง')
+    showToast('error', 'ph:warning-bold', 'เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการซื้อคาร์บอนเครดิตได้ กรุณาลองใหม่อีกครั้ง')
   } finally {
     loading.value = false
   }
@@ -1072,6 +1188,225 @@ const scrollToAudit = () => {
   }
 }
 
+// ============================================================
+// AUTO NOTIFICATION ENGINE
+// Checks conditions automatically (tree growth, CO2 limits etc.)
+// ============================================================
+let autoNotifInterval = null
+
+// Track previously notified states to avoid repeats
+const getNotifKey = (key) => `eco_notif_${selectedUserId.value}_${key}`
+const wasNotified = (key) => {
+  if (typeof window === 'undefined') return true
+  return localStorage.getItem(getNotifKey(key)) === 'true'
+}
+const markNotified = (key) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(getNotifKey(key), 'true')
+  }
+}
+const clearDailyNotifs = () => {
+  if (typeof window === 'undefined') return
+  // Reset daily notification flags at midnight
+  const lastReset = localStorage.getItem('eco_notif_last_reset')
+  const today = new Date().toDateString()
+  if (lastReset !== today) {
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('eco_notif_') && k.includes('_daily_')) {
+        keysToRemove.push(k)
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k))
+    localStorage.setItem('eco_notif_last_reset', today)
+  }
+}
+
+// Tree growth milestone notification logic
+const checkTreeGrowthMilestones = async () => {
+  try {
+    let plantedTrees = []
+    
+    if (!isOffline.value) {
+      // Fetch from Supabase
+      const data = await $fetch(
+        `${SUPABASE_URL}/rest/v1/planted_trees?user_id=eq.${selectedUserId.value}&select=*`,
+        { headers }
+      )
+      plantedTrees = data || []
+    } else {
+      // Use localStorage cache
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(`eco_forest_${selectedUserId.value}`)
+        if (stored) plantedTrees = JSON.parse(stored)
+      }
+    }
+
+    const treeSpeciesMap = {
+      'yang-na': 'ยางนา',
+      'phayung': 'พะยูง',
+      'nonthri': 'นนทรี',
+      'mangrove': 'โกงกางใบใหญ่',
+      'ratchaphruek': 'ราชพฤกษ์'
+    }
+
+    let newMatureCount = 0
+    let newSaplingCount = 0
+    let matureTreeName = ''
+    let saplingTreeName = ''
+
+    plantedTrees.forEach(plant => {
+      const plantedTime = new Date(plant.date || plant.planted_at || Date.now()).getTime()
+      const daysPassed = (Date.now() - plantedTime) / (1000 * 60 * 60 * 24)
+      const speciesName = treeSpeciesMap[plant.species_id || plant.speciesId] || 'ต้นไม้'
+      const qty = plant.qty || 1
+      const notifIdSapling = `sapling_${plant.id}`
+      const notifIdMature = `mature_${plant.id}`
+
+      // Seedling → Sapling (>= 5 days)
+      if (daysPassed >= 5 && daysPassed < 20 && !wasNotified(notifIdSapling)) {
+        newSaplingCount += qty
+        saplingTreeName = speciesName
+        markNotified(notifIdSapling)
+      }
+
+      // Sapling → Mature (>= 20 days)
+      if (daysPassed >= 20 && !wasNotified(notifIdMature)) {
+        newMatureCount += qty
+        matureTreeName = speciesName
+        markNotified(notifIdMature)
+      }
+    })
+
+    if (newMatureCount > 0) {
+      showToast(
+        'success',
+        'ph:tree-bold',
+        `🌳 ต้นไม้โตเต็มวัยแล้ว! (${newMatureCount} ต้น)`,
+        `${matureTreeName} ของคุณโตเต็มวัยแล้ว กำลังดูดซับ CO₂ ได้เต็มประสิทธิภาพ!`,
+        7000
+      )
+    } else if (newSaplingCount > 0) {
+      showToast(
+        'success',
+        'ph:plant-bold',
+        `🌿 ต้นไม้เข้าระยะรุ่นเยาว์! (${newSaplingCount} ต้น)`,
+        `${saplingTreeName} ของคุณกำลังเติบโต เร็วๆ นี้จะโตเต็มวัยและดูดซับ CO₂ ได้มากขึ้น`,
+        6000
+      )
+    }
+  } catch (err) {
+    // Silent fail for background checks
+  }
+}
+
+// Check CO2 monthly limit warnings
+const checkCarbonLimitWarning = () => {
+  const total = displayTotalCO2.value
+  const pct = (total / 400) * 100
+
+  if (pct >= 90 && pct < 100 && !wasNotified('daily_co2_critical')) {
+    markNotified('daily_co2_critical')
+    showToast(
+      'error',
+      'ph:warning-circle-bold',
+      '🚨 เกือบถึงขีดจำกัด CO₂ แล้ว!',
+      `คุณปล่อยคาร์บอนไปแล้ว ${total.toFixed(1)} kg จาก 400 kg (${pct.toFixed(0)}%) ซื้อคาร์บอนเครดิตเพื่อลดผลกระทบ`,
+      8000
+    )
+  } else if (pct >= 75 && pct < 90 && !wasNotified('daily_co2_warning')) {
+    markNotified('daily_co2_warning')
+    showToast(
+      'warning',
+      'ph:trend-up-bold',
+      '⚠️ คาร์บอนฟุตพริ้นท์สูงขึ้น',
+      `คุณใช้โควต้า CO₂ ไปแล้ว ${pct.toFixed(0)}% ของเดือน ลองปั่นจักรยานหรือปลูกต้นไม้เพิ่ม`,
+      6000
+    )
+  }
+}
+
+// Check Eco Level upgrade
+const checkEcoLevelUpgrade = () => {
+  const pts = displayEcoPoints.value
+  const levelKey = `daily_level_${pts >= 1500 ? 'guardian' : pts >= 800 ? 'beginner' : 'starter'}`
+
+  if (pts >= 1500 && !wasNotified('level_guardian')) {
+    markNotified('level_guardian')
+    showToast(
+      'success',
+      'ph:crown-bold',
+      '👑 ขึ้นระดับ ผู้พิทักษ์โลก 🌳!',
+      `ยินดีด้วย! คุณสะสม Eco Points ได้ ${pts.toLocaleString()} pts แล้ว ขึ้นสู่ระดับสูงสุด!`,
+      7000
+    )
+  } else if (pts >= 800 && !wasNotified('level_beginner')) {
+    markNotified('level_beginner')
+    showToast(
+      'success',
+      'ph:star-bold',
+      '⭐ ขึ้นระดับ มือใหม่รักษ์โลก 🌱!',
+      `ยินดีด้วย! คุณสะสม Eco Points ได้ ${pts.toLocaleString()} pts แล้ว เก็บคะแนนต่อเพื่อเป็น ผู้พิทักษ์โลก!`,
+      7000
+    )
+  }
+}
+
+// Morning cycling tip (shown once per day between 6-10 AM)
+const checkMorningCyclingSuggestion = () => {
+  const hour = new Date().getHours()
+  if (hour >= 6 && hour < 10 && !bikeLogged.value && !wasNotified('daily_bike_morning')) {
+    markNotified('daily_bike_morning')
+    showToast(
+      'info',
+      'ph:sun-bold',
+      '☀️ อรุณสวัสดิ์! วันนี้อากาศดีมาก',
+      'เหมาะสำหรับการปั่นจักรยานไปทำงาน ลดคาร์บอนได้ 2.5 kg และรับ +100 Eco Points!',
+      8000
+    )
+  }
+}
+
+// Weekly eco summary (shown once per session on weekends)
+const checkWeeklySummary = () => {
+  const dayOfWeek = new Date().getDay() // 0 = Sunday, 6 = Saturday
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+  if (isWeekend && !wasNotified('weekly_summary')) {
+    markNotified('weekly_summary')
+    const pts = displayEcoPoints.value
+    const co2 = carbonSaved.value
+    setTimeout(() => {
+      showToast(
+        'info',
+        'ph:chart-bar-bold',
+        '📊 สรุปกิจกรรมสัปดาห์นี้',
+        `คุณลดคาร์บอนได้ ${co2} kg และสะสม ${pts.toLocaleString()} Eco Points เยี่ยมมาก!`,
+        8000
+      )
+    }, 3000)
+  }
+}
+
+// Run all auto checks
+const runAutoChecks = async () => {
+  clearDailyNotifs()
+  checkCarbonLimitWarning()
+  checkEcoLevelUpgrade()
+  checkMorningCyclingSuggestion()
+  checkWeeklySummary()
+  await checkTreeGrowthMilestones()
+}
+
+// Start auto notification engine (checks every 30 seconds)
+const startAutoNotifEngine = () => {
+  if (typeof window === 'undefined') return
+  // Run initial check after data loads (3 second delay)
+  setTimeout(runAutoChecks, 3000)
+  // Then check every 30 seconds
+  autoNotifInterval = setInterval(runAutoChecks, 30000)
+}
+
 const subscribeRealtime = () => {
   if (typeof window === 'undefined') return
   
@@ -1080,26 +1415,44 @@ const subscribeRealtime = () => {
   }
 
   realtimeChannel = supabase.channel(`dashboard-user-${selectedUserId.value}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      if (payload.eventType === 'UPDATE') {
+        const newPts = payload.new?.loyalty_points
+        const oldPts = payload.old?.loyalty_points
+        if (newPts !== undefined && oldPts !== undefined && newPts !== oldPts) {
+          showToast('success', 'ph:star-bold', '⭐ Eco Points อัพเดตแล้ว!', `คะแนนสิ่งแวดล้อมของคุณเปลี่ยนเป็น ${newPts.toLocaleString()} pts`, 5000)
+        }
+      }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_tickets', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'flight_tickets', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      showToast('warning', 'ph:airplane-bold', '✈️ มีเที่ยวบินใหม่!', `พบการจองเที่ยวบินใหม่ในบัญชีของคุณ`, 5000)
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'hotel_bookings', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'hotel_bookings', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      showToast('warning', 'ph:bed-bold', '🏨 มีการจองโรงแรมใหม่!', `พบการจองโรงแรมใหม่ในบัญชีของคุณ`, 5000)
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ecommerce_orders', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ecommerce_orders', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      showToast('warning', 'ph:shopping-bag-bold', '🛍️ มีคำสั่งซื้อใหม่!', `พบคำสั่งซื้อสินค้าออนไลน์ใหม่ในบัญชีของคุณ`, 5000)
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'food_orders', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      showToast('info', 'ph:fork-knife-bold', '🍜 มีออเดอร์อาหารใหม่!', `พบการสั่งอาหารเดลิเวอรี่ใหม่ในบัญชีของคุณ`, 5000)
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transactions', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      const tx = payload.new
+      if (tx?.type === 'REDUCTION') {
+        showToast('success', 'ph:leaf-bold', '🌱 บันทึกกิจกรรมรักษ์โลก!', tx.note || 'บันทึกกิจกรรมลดคาร์บอนเรียบร้อยแล้ว', 5000)
+      } else if (tx?.type === 'EXPENSE') {
+        showToast('warning', 'ph:credit-card-bold', '💳 มีรายการใช้จ่ายใหม่!', `หมวด ${tx.category || 'ทั่วไป'}: ${tx.note || 'รายการธุรกรรม'}`, 5000)
+      }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'planted_trees', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'planted_trees', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
       loadUserData()
+      showToast('success', 'ph:tree-bold', '🌳 ปลูกต้นไม้สำเร็จ!', `เพิ่มต้นไม้ใหม่ในป่าของคุณเรียบร้อยแล้ว`, 5000)
     })
     .subscribe()
 }
@@ -1120,11 +1473,15 @@ onMounted(async () => {
   ])
   await loadUserData()
   subscribeRealtime()
+  startAutoNotifEngine()
 })
 
 onBeforeUnmount(() => {
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel)
+  }
+  if (autoNotifInterval) {
+    clearInterval(autoNotifInterval)
   }
 })
 </script>

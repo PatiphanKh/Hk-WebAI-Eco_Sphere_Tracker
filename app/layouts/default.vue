@@ -19,7 +19,9 @@
       <ClientOnly>
         <!-- User Profile Card -->
         <div class="mb-6 bg-white p-3 rounded-2xl border border-[#cbe5d4] flex items-center gap-3 shadow-sm">
-          <img :src="currentUser.avatar" class="w-10 h-10 rounded-full object-cover border border-gray-100 flex-shrink-0" alt="Avatar" />
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-green-100 to-emerald-200 border border-green-200 flex items-center justify-center flex-shrink-0">
+            <Icon name="ph:user-bold" class="w-5 h-5 text-green-700" />
+          </div>
           <div class="min-w-0">
             <p class="text-xs font-black text-emerald-950 truncate">{{ currentUser.name }}</p>
             <span class="inline-flex items-center gap-1 text-[9px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full mt-0.5 border border-green-100">
@@ -129,10 +131,60 @@
       </div>
     </div>
   </div>
+
+  <!-- Global Navigation Toast Container -->
+  <Teleport to="body">
+    <div class="fixed top-5 right-5 z-[9998] flex flex-col gap-3 pointer-events-none" style="max-width: 340px; width: 100%;">
+      <TransitionGroup name="nav-toast">
+        <div
+          v-for="toast in navToasts"
+          :key="toast.id"
+          class="pointer-events-auto w-full rounded-2xl shadow-lg border flex gap-3 p-3.5 relative overflow-hidden"
+          :class="{
+            'bg-white/95 border-emerald-100 backdrop-blur-md': true
+          }"
+          style="backdrop-filter: blur(12px);"
+        >
+          <!-- Colored accent bar -->
+          <div class="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" :style="{ background: toast.accent }"></div>
+
+          <!-- Icon -->
+          <div
+            class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ml-1"
+            :style="{ background: toast.accent + '22', color: toast.accent }"
+          >
+            <Icon :name="toast.icon" class="w-4 h-4" />
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 min-w-0">
+            <p class="text-[11px] font-black text-gray-800 leading-tight">{{ toast.title }}</p>
+            <p class="text-[10px] text-gray-500 font-medium mt-0.5 leading-relaxed">{{ toast.message }}</p>
+            <!-- User badge -->
+            <div class="flex items-center gap-1 mt-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+              <span class="text-[9px] font-bold text-green-700">{{ currentUser.name }}</span>
+            </div>
+          </div>
+
+          <!-- Close -->
+          <button @click="removeNavToast(toast.id)" class="flex-shrink-0 text-gray-300 hover:text-gray-500 transition self-start mt-0.5">
+            <Icon name="ph:x-bold" class="w-3 h-3" />
+          </button>
+
+          <!-- Timer bar -->
+          <div
+            class="absolute bottom-0 left-0 h-0.5 rounded-b-2xl transition-all duration-100"
+            :style="{ width: toast.progress + '%', background: toast.accent }"
+          />
+        </div>
+      </TransitionGroup>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, reactive } from 'vue'
 
 const route = useRoute()  
 const isOffline = useOffline()
@@ -140,6 +192,100 @@ const selectedUserId = useState('selected_user_id', () => 'u001')
 const selectedUserProfile = useState('selected_user_profile', () => null)
 const supabase = useSupabaseClient()
 let userRealtimeChannel = null
+
+// ============================================================
+// NAVIGATION ACTIVITY TOAST SYSTEM
+// ============================================================
+const navToasts = ref([])
+let navToastCounter = 0
+
+const showNavToast = (icon, accent, title, message, duration = 4500) => {
+  const id = ++navToastCounter
+  const toast = reactive({ id, icon, accent, title, message, progress: 100 })
+  navToasts.value.push(toast)
+
+  const startTime = Date.now()
+  const interval = setInterval(() => {
+    const elapsed = Date.now() - startTime
+    toast.progress = Math.max(0, 100 - (elapsed / duration) * 100)
+    if (elapsed >= duration) {
+      clearInterval(interval)
+      removeNavToast(id)
+    }
+  }, 50)
+}
+
+const removeNavToast = (id) => {
+  const idx = navToasts.value.findIndex(t => t.id === id)
+  if (idx !== -1) navToasts.value.splice(idx, 1)
+}
+
+// Page activity map — what is the user doing on each page?
+const pageActivityMap = {
+  '/': {
+    icon: 'ph:squares-four-bold',
+    accent: '#059669',
+    title: '📊 กลับมาที่ Dashboard แล้ว',
+    message: 'ดูภาพรวมคาร์บอนฟุตพริ้นท์และกิจกรรมล่าสุดของคุณ'
+  },
+  '/ai-assistant': {
+    icon: 'ph:chat-text-bold',
+    accent: '#7c3aed',
+    title: '🤖 เปิด AI Assistant',
+    message: 'ถาม AI เกี่ยวกับการลดคาร์บอนและคำแนะนำสิ่งแวดล้อมส่วนตัว'
+  },
+  '/air-quality': {
+    icon: 'ph:wind-bold',
+    accent: '#0284c7',
+    title: '💨 ตรวจสอบคุณภาพอากาศ',
+    message: 'ดูค่า AQI, PM2.5 และดัชนีคุณภาพอากาศรอบตัวคุณแบบเรียลไทม์'
+  },
+  '/water-health': {
+    icon: 'ph:drop-bold',
+    accent: '#0891b2',
+    title: '💧 ตรวจสอบสุขภาพน้ำ',
+    message: 'วิเคราะห์คุณภาพน้ำและผลกระทบต่อระบบนิเวศในพื้นที่'
+  },
+  '/flora-analysis': {
+    icon: 'ph:tree-bold',
+    accent: '#16a34a',
+    title: '🌳 เข้าสู่ Flora Analysis',
+    message: 'ดูป่าของคุณ ปลูกต้นไม้ และวิเคราะห์การดูดซับ CO₂'
+  },
+  '/settings': {
+    icon: 'ph:gear-bold',
+    accent: '#64748b',
+    title: '⚙️ เปิดหน้าตั้งค่า',
+    message: 'แก้ไขข้อมูลส่วนตัวและปรับแต่งการแจ้งเตือนของคุณ'
+  },
+  '/support': {
+    icon: 'ph:question-bold',
+    accent: '#d97706',
+    title: '🙋 เปิดหน้าช่วยเหลือ',
+    message: 'ดูคำถามที่พบบ่อยและติดต่อทีมสนับสนุน Eco-Sphere'
+  }
+}
+
+// Watch route changes and fire navigation toasts
+let isFirstLoad = true
+watch(() => route.path, (newPath, oldPath) => {
+  // Skip the very first load to avoid toasting on initial render
+  if (isFirstLoad) {
+    isFirstLoad = false
+    return
+  }
+  // Skip select-profile page
+  if (newPath === '/select-profile' || oldPath === '/select-profile') return
+
+  const activity = pageActivityMap[newPath]
+  if (activity) {
+    // Clear previous nav toasts first
+    navToasts.value = []
+    setTimeout(() => {
+      showNavToast(activity.icon, activity.accent, activity.title, activity.message)
+    }, 200)
+  }
+})
 
 const loadUserProfile = async () => {
   if (!selectedUserId.value) return
