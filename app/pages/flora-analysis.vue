@@ -633,12 +633,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 // shared states matching layout and settings.vue
 const selectedUserId = useState('selected_user_id', () => 'u001')
 const offsetBought = useState('offset_bought', () => false)
 const isOffline = useOffline()
+const supabase = useSupabaseClient()
 
 // Tabs configuration
 const tabs = [
@@ -877,32 +878,54 @@ const getInitialSeedForUser = (userId) => {
   ]
 }
 
-// Load user's planted trees from localStorage scoped by active user ID
-const loadPlantedTrees = () => {
-  if (typeof window !== 'undefined') {
-    const key = `eco_forest_${selectedUserId.value}`
-    const stored = localStorage.getItem(key)
-    if (stored) {
-      try {
-        myPlantedTrees.value = JSON.parse(stored)
-      } catch (e) {
-        console.error('Error parsing planted trees:', e)
-        myPlantedTrees.value = []
+// Load user's planted trees from database or localStorage fallback
+const loadPlantedTrees = async () => {
+  if (isOffline.value) {
+    if (typeof window !== 'undefined') {
+      const key = `eco_forest_${selectedUserId.value}`
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        try {
+          myPlantedTrees.value = JSON.parse(stored)
+          return
+        } catch (e) {
+          console.error('Error parsing planted trees:', e)
+          myPlantedTrees.value = []
+        }
+      } else {
+        const initialSeed = getInitialSeedForUser(selectedUserId.value)
+        myPlantedTrees.value = initialSeed
+        localStorage.setItem(key, JSON.stringify(initialSeed))
       }
-    } else {
-      // Seed initial trees dynamically for any simulated user
-      const initialSeed = getInitialSeedForUser(selectedUserId.value)
-      myPlantedTrees.value = initialSeed
-      localStorage.setItem(key, JSON.stringify(initialSeed))
     }
+    return
   }
-}
 
-// Save current state of planted trees to localStorage
-const savePlantedTrees = () => {
-  if (typeof window !== 'undefined') {
-    const key = `eco_forest_${selectedUserId.value}`
-    localStorage.setItem(key, JSON.stringify(myPlantedTrees.value))
+  try {
+    const { data, error } = await supabase
+      .from('planted_trees')
+      .select('*')
+      .eq('user_id', selectedUserId.value)
+      .order('date', { ascending: false })
+      
+    if (data) {
+      myPlantedTrees.value = data.map(t => ({
+        id: t.id,
+        speciesId: t.species_id,
+        qty: t.qty,
+        location: t.location,
+        date: t.date,
+        cost: t.cost
+      }))
+      
+      // Cache
+      if (typeof window !== 'undefined') {
+        const key = `eco_forest_${selectedUserId.value}`
+        localStorage.setItem(key, JSON.stringify(myPlantedTrees.value))
+      }
+    }
+  } catch (err) {
+    console.error('Error loading planted trees from Supabase:', err)
   }
 }
 
@@ -919,9 +942,10 @@ const closePlantModal = () => {
 }
 
 // Sponsoring processing action
-const confirmPlanting = () => {
+const confirmPlanting = async () => {
+  const treeId = 'tree-' + Date.now() + '-' + Math.floor(Math.random() * 100)
   const newPlanted = {
-    id: 'tree-' + Date.now() + '-' + Math.floor(Math.random() * 100),
+    id: treeId,
     speciesId: selectedTreeForPlanting.value.id,
     qty: plantQty.value,
     location: selectedLocation.value,
@@ -929,25 +953,67 @@ const confirmPlanting = () => {
     cost: plantQty.value * selectedTreeForPlanting.value.cost
   }
 
-  myPlantedTrees.value.unshift(newPlanted)
-  savePlantedTrees()
+  if (isOffline.value) {
+    myPlantedTrees.value.unshift(newPlanted)
+    if (typeof window !== 'undefined') {
+      const key = `eco_forest_${selectedUserId.value}`
+      localStorage.setItem(key, JSON.stringify(myPlantedTrees.value))
+    }
+    offsetBought.value = true
+    return
+  }
 
-  // Update simulator settings automatically to match new planting
-  simQuantities.value[newPlanted.speciesId] = (simQuantities.value[newPlanted.speciesId] || 0) + newPlanted.qty
+  try {
+    // 1. Insert tree to database
+    await supabase.from('planted_trees').insert({
+      id: treeId,
+      user_id: selectedUserId.value,
+      species_id: selectedTreeForPlanting.value.id,
+      qty: plantQty.value,
+      location: selectedLocation.value,
+      date: newPlanted.date,
+      cost: newPlanted.cost
+    })
 
-  // Trigger offset state in dashboard
-  offsetBought.value = true
+    // 2. Add points to user in database
+    const earnedPoints = plantQty.value * selectedTreeForPlanting.value.points
+    const currentPoints = userProfile.value ? (userProfile.value.loyalty_points || 0) : 500
+    await supabase
+      .from('users')
+      .update({ loyalty_points: currentPoints + earnedPoints })
+      .eq('user_id', selectedUserId.value)
 
-  // Toast confirmation
-  toastMessage.value = `ปลูกต้น ${selectedTreeForPlanting.value.name} จำนวน ${plantQty.value} ต้น เรียบร้อยแล้ว (ได้รับ +${plantQty.value * selectedTreeForPlanting.value.points} pts)`
-  toastShow.value = true
+    // 3. Log a REDUCTION transaction in transactions
+    const carbonRed = (selectedTreeForPlanting.value.co2 * plantQty.value).toFixed(1)
+    const newTx = {
+      txn_id: 'tx-plant-' + Date.now(),
+      user_id: selectedUserId.value,
+      type: 'REDUCTION',
+      category: 'Offset',
+      amount: newPlanted.cost,
+      date: newPlanted.date,
+      note: `ปลูกต้น${selectedTreeForPlanting.value.name} จำนวน ${plantQty.value} ต้น ที่${selectedLocation.value} (ลดคาร์บอน ${carbonRed}kg)`
+    }
+    await supabase.from('transactions').insert(newTx)
 
-  closePlantModal()
+    // Update simulator settings automatically to match new planting
+    simQuantities.value[newPlanted.speciesId] = (simQuantities.value[newPlanted.speciesId] || 0) + newPlanted.qty
+    offsetBought.value = true
 
-  // Auto-hide toast
-  setTimeout(() => {
-    toastShow.value = false
-  }, 4500)
+    // Toast confirmation
+    toastMessage.value = `ปลูกต้น ${selectedTreeForPlanting.value.name} จำนวน ${plantQty.value} ต้น เรียบร้อยแล้ว (ได้รับ +${earnedPoints} pts)`
+    toastShow.value = true
+
+    closePlantModal()
+
+    // Auto-hide toast
+    setTimeout(() => {
+      toastShow.value = false
+    }, 4500)
+  } catch (err) {
+    console.error('Error confirming tree planting:', err)
+    alert('เกิดข้อผิดพลาดในการบันทึกการปลูกต้นไม้ กรุณาลองใหม่อีกครั้ง')
+  }
 }
 
 // Reset functions
@@ -978,10 +1044,11 @@ const resetSimulator = () => {
 }
 
 // Apply simulator quantities as a bundle sponsor
-const applySimToForest = () => {
+const applySimToForest = async () => {
   const listToPlant = []
   let totalCost = 0
   let totalPointsEarned = 0
+  let totalCO2Saved = 0
   
   treeSpecies.forEach(tree => {
     const qty = simQuantities.value[tree.id] || 0
@@ -996,20 +1063,69 @@ const applySimToForest = () => {
       })
       totalCost += qty * tree.cost
       totalPointsEarned += qty * tree.points
+      totalCO2Saved += qty * tree.co2
     }
   })
 
   if (listToPlant.length > 0) {
-    myPlantedTrees.value = [...listToPlant, ...myPlantedTrees.value]
-    savePlantedTrees()
+    if (isOffline.value) {
+      myPlantedTrees.value = [...listToPlant, ...myPlantedTrees.value]
+      if (typeof window !== 'undefined') {
+        const key = `eco_forest_${selectedUserId.value}`
+        localStorage.setItem(key, JSON.stringify(myPlantedTrees.value))
+      }
+      offsetBought.value = true
+      
+      toastMessage.value = `ปลูกต้นไม้จำลองรวม ${totalSimTrees.value} ต้น สำเร็จ! (ได้รับ +${totalPointsEarned} pts)`
+      toastShow.value = true
+      setTimeout(() => { toastShow.value = false }, 4000)
+      activeTab.value = 'my-forest'
+      return
+    }
 
-    offsetBought.value = true
-    
-    toastMessage.value = `ปลูกต้นไม้จำลองรวม ${totalSimTrees.value} ต้น สำเร็จ! (ได้รับ +${totalPointsEarned} pts)`
-    toastShow.value = true
-    setTimeout(() => { toastShow.value = false }, 4000)
+    try {
+      // 1. Insert all trees to Supabase
+      const rows = listToPlant.map(item => ({
+        id: item.id,
+        user_id: selectedUserId.value,
+        species_id: item.speciesId,
+        qty: item.qty,
+        location: item.location,
+        date: item.date,
+        cost: item.cost
+      }))
+      await supabase.from('planted_trees').insert(rows)
 
-    activeTab.value = 'my-forest'
+      // 2. Add points to user in database
+      const currentPoints = userProfile.value ? (userProfile.value.loyalty_points || 0) : 500
+      await supabase
+        .from('users')
+        .update({ loyalty_points: currentPoints + totalPointsEarned })
+        .eq('user_id', selectedUserId.value)
+
+      // 3. Log a REDUCTION transaction in transactions
+      const newTx = {
+        txn_id: 'tx-sim-plant-' + Date.now(),
+        user_id: selectedUserId.value,
+        type: 'REDUCTION',
+        category: 'Offset',
+        amount: totalCost,
+        date: new Date().toISOString(),
+        note: `ปลูกต้นไม้จำลองรวม ${totalSimTrees.value} ต้น (ลดคาร์บอน ${totalCO2Saved.toFixed(1)}kg)`
+      }
+      await supabase.from('transactions').insert(newTx)
+
+      offsetBought.value = true
+      
+      toastMessage.value = `ปลูกต้นไม้จำลองรวม ${totalSimTrees.value} ต้น สำเร็จ! (ได้รับ +${totalPointsEarned} pts)`
+      toastShow.value = true
+      setTimeout(() => { toastShow.value = false }, 4000)
+
+      activeTab.value = 'my-forest'
+    } catch (err) {
+      console.error('Error applying simulator to forest:', err)
+      alert('เกิดข้อผิดพลาดในการบันทึกการปลูกต้นไม้จำลอง กรุณาลองใหม่อีกครั้ง')
+    }
   }
 }
 
@@ -1106,10 +1222,28 @@ const formatDate = (isoString) => {
   return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
 }
 
-// Watch user profile change to reload trees from local storage scoped by user
-watch(selectedUserId, () => {
-  loadUserProfile()
-  loadPlantedTrees()
+let floraRealtimeChannel = null
+
+const subscribeFloraRealtime = () => {
+  if (typeof window === 'undefined') return
+  if (floraRealtimeChannel) {
+    supabase.removeChannel(floraRealtimeChannel)
+  }
+  floraRealtimeChannel = supabase.channel(`flora-user-${selectedUserId.value}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'planted_trees', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadPlantedTrees()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserProfile()
+    })
+    .subscribe()
+}
+
+// Watch user profile change to reload trees
+watch(selectedUserId, async () => {
+  await loadUserProfile()
+  await loadPlantedTrees()
+  subscribeFloraRealtime()
 })
 
 onMounted(async () => {
@@ -1123,7 +1257,14 @@ onMounted(async () => {
     }
   }
   await loadUserProfile()
-  loadPlantedTrees()
+  await loadPlantedTrees()
+  subscribeFloraRealtime()
+})
+
+onBeforeUnmount(() => {
+  if (floraRealtimeChannel) {
+    supabase.removeChannel(floraRealtimeChannel)
+  }
 })
 </script>
 

@@ -88,6 +88,7 @@
 import { ref, onMounted } from 'vue'
 
 const config = useRuntimeConfig()
+const supabase = useSupabaseClient()
 
 // globally shared states
 const selectedUserId = useState('selected_user_id', () => 'u001')
@@ -97,7 +98,7 @@ const syncFreqInput = ref(30)
 const cacheOfflineInput = ref(true)
 const usernameInput = ref('Somchai Jaidee')
 
-const loadSettings = () => {
+const loadSettings = async () => {
   if (typeof window !== 'undefined') {
     syncFreqInput.value = parseInt(localStorage.getItem('sync_frequency') || '30', 10)
     cacheOfflineInput.value = localStorage.getItem('cache_offline') !== 'false'
@@ -107,23 +108,43 @@ const loadSettings = () => {
     if (savedId) {
       selectedUserId.value = savedId
     }
-    const names = {
-      'u001': 'Somchai Jaidee',
-      'u002': 'Alice Green',
-      'u005': 'Wichai Nilsuwan'
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('name')
+        .eq('user_id', selectedUserId.value)
+        .maybeSingle()
+      if (data) {
+        usernameInput.value = data.name
+      } else {
+        usernameInput.value = localStorage.getItem('username') || 'Somchai Jaidee'
+      }
+    } catch (err) {
+      console.error('Error fetching name in settings:', err)
+      usernameInput.value = localStorage.getItem('username') || 'Somchai Jaidee'
     }
-    usernameInput.value = names[selectedUserId.value] || localStorage.getItem('username') || 'Somchai Jaidee'
   }
 }
 
-const saveSettings = () => {
+const saveSettings = async () => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('sync_frequency', syncFreqInput.value.toString())
     localStorage.setItem('cache_offline', cacheOfflineInput.value.toString())
     localStorage.setItem('username', usernameInput.value)
   }
 
-  alert('บันทึกการตั้งค่าเรียบร้อยแล้ว!')
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ name: usernameInput.value })
+      .eq('user_id', selectedUserId.value)
+    
+    alert('บันทึกการตั้งค่าและอัปเดตข้อมูลผู้ใช้งานในฐานข้อมูลเรียบร้อยแล้ว!')
+  } catch (err) {
+    console.error('Error saving name to Supabase:', err)
+    alert('บันทึกการตั้งค่าแล้ว แต่ไม่สามารถอัปเดตข้อมูลในเซิร์ฟเวอร์ได้เนื่องจากปัญหาเครือข่าย')
+  }
 }
 
 const cancelSettings = () => {

@@ -132,34 +132,122 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
 const route = useRoute()  
 const isOffline = useOffline()
 const selectedUserId = useState('selected_user_id', () => 'u001')
+const selectedUserProfile = useState('selected_user_profile', () => null)
+const supabase = useSupabaseClient()
+let userRealtimeChannel = null
+
+const loadUserProfile = async () => {
+  if (!selectedUserId.value) return
+  
+  // Offline cached load
+  if (isOffline.value) {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`offline_cache_user_data_${selectedUserId.value}`)
+      if (cached) {
+        try {
+          const cacheData = JSON.parse(cached)
+          if (cacheData.selectedUser) {
+            selectedUserProfile.value = cacheData.selectedUser
+            return
+          }
+        } catch (e) {
+          console.error('Failed to parse cache in layout:', e)
+        }
+      }
+    }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', selectedUserId.value)
+      .maybeSingle()
+    if (data) {
+      selectedUserProfile.value = data
+      isOffline.value = false
+    }
+  } catch (err) {
+    console.error('Error loading profile in default layout:', err)
+  }
+}
+
+const subscribeUserRealtime = () => {
+  if (typeof window === 'undefined') return
+  if (userRealtimeChannel) {
+    supabase.removeChannel(userRealtimeChannel)
+  }
+  userRealtimeChannel = supabase.channel(`layout-user-${selectedUserId.value}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `user_id=eq.${selectedUserId.value}` }, (payload) => {
+      if (payload.new) {
+        selectedUserProfile.value = payload.new
+      } else {
+        loadUserProfile()
+      }
+    })
+    .subscribe()
+}
 
 const currentUser = computed(() => {
   const uid = selectedUserId.value
-  const users = {
-    'u001': { name: 'Somchai Jaidee', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' },
-    'u002': { name: 'Alice Green', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' },
-    'u005': { name: 'Wichai Nilsuwan', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80' }
+  const avatars = {
+    'u001': 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
+    'u002': 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
+    'u005': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'
   }
-  return users[uid] || users['u001']
+  
+  const defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'
+  
+  if (selectedUserProfile.value) {
+    return {
+      name: selectedUserProfile.value.name,
+      avatar: avatars[uid] || defaultAvatar
+    }
+  }
+  
+  const names = {
+    'u001': 'Somchai Jaidee',
+    'u002': 'Alice Green',
+    'u005': 'Wichai Nilsuwan'
+  }
+  
+  return {
+    name: names[uid] || 'Somchai Jaidee',
+    avatar: avatars[uid] || defaultAvatar
+  }
 })
 
 const handleExport = () => {
   alert('กำลังเตรียมดาวน์โหลดรายงานสรุปคาร์บอนฟุตพริ้นท์...')
 }
 
-onMounted(() => {
+watch(selectedUserId, () => {
+  loadUserProfile()
+  subscribeUserRealtime()
+})
+
+onMounted(async () => {
   if (typeof window !== 'undefined') {
     const savedId = localStorage.getItem('selected_user_id')
     if (savedId) {
       selectedUserId.value = savedId
     } else if (route.path !== '/select-profile') {
       navigateTo('/select-profile')
+      return
     }
+  }
+  await loadUserProfile()
+  subscribeUserRealtime()
+})
+
+onBeforeUnmount(() => {
+  if (userRealtimeChannel) {
+    supabase.removeChannel(userRealtimeChannel)
   }
 })
 </script>

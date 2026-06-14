@@ -277,14 +277,109 @@ let realtimeChannel = null
 
 // Interactive states
 const bikeLogged = ref(false)
-const offsetBought = useState('offset_bought', () => false)
+const offsetBought = ref(false)
 
-const logBikeActivity = () => {
-  bikeLogged.value = true
+const isToday = (dateStr) => {
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  const today = new Date()
+  return d.getDate() === today.getDate() &&
+         d.getMonth() === today.getMonth() &&
+         d.getFullYear() === today.getFullYear()
 }
 
-const buyOffset = () => {
-  offsetBought.value = true
+const logBikeActivity = async () => {
+  if (loading.value || bikeLogged.value) return
+  
+  if (isOffline.value) {
+    bikeLogged.value = true
+    return
+  }
+  
+  loading.value = true
+  const newTx = {
+    txn_id: 'tx-bike-' + Date.now(),
+    user_id: selectedUserId.value,
+    type: 'REDUCTION',
+    category: 'Transport',
+    amount: 0,
+    date: new Date().toISOString(),
+    note: 'ปั่นจักรยานไปทำงาน (ลดคาร์บอน 2.5kg)'
+  }
+  
+  try {
+    await $fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Prefer': 'return=representation'
+      },
+      body: newTx
+    })
+    
+    const currentPoints = calculations.value.totalPoints
+    await $fetch(`${SUPABASE_URL}/rest/v1/users?user_id=eq.${selectedUserId.value}`, {
+      method: 'PATCH',
+      headers,
+      body: {
+        loyalty_points: currentPoints + 100
+      }
+    })
+    
+    bikeLogged.value = true
+  } catch (err) {
+    console.error('Error saving bike activity:', err)
+    alert('เกิดข้อผิดพลาดในการบันทึกกิจกรรม กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
+  }
+}
+
+const buyOffset = async () => {
+  if (loading.value || offsetBought.value) return
+  
+  if (isOffline.value) {
+    offsetBought.value = true
+    return
+  }
+  
+  loading.value = true
+  const newTx = {
+    txn_id: 'tx-offset-' + Date.now(),
+    user_id: selectedUserId.value,
+    type: 'REDUCTION',
+    category: 'Offset',
+    amount: 0,
+    date: new Date().toISOString(),
+    note: 'ซื้อคาร์บอนเครดิตชดเชย (ลดคาร์บอน 200kg)'
+  }
+  
+  try {
+    await $fetch(`${SUPABASE_URL}/rest/v1/transactions`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Prefer': 'return=representation'
+      },
+      body: newTx
+    })
+    
+    const currentPoints = calculations.value.totalPoints
+    await $fetch(`${SUPABASE_URL}/rest/v1/users?user_id=eq.${selectedUserId.value}`, {
+      method: 'PATCH',
+      headers,
+      body: {
+        loyalty_points: currentPoints + 500
+      }
+    })
+    
+    offsetBought.value = true
+  } catch (err) {
+    console.error('Error saving offset activity:', err)
+    alert('เกิดข้อผิดพลาดในการซื้อคาร์บอนเครดิตชดเชย กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
+  }
 }
 
 // Supabase Connection Settings
@@ -400,6 +495,10 @@ const loadUserData = async () => {
     foodOrders.value = foodRes || []
     transactions.value = txsRes || []
     
+    // Check if logged in database today
+    bikeLogged.value = (txsRes || []).some(tx => tx.type === 'REDUCTION' && tx.note.includes('ปั่นจักรยาน') && isToday(tx.date))
+    offsetBought.value = (txsRes || []).some(tx => tx.type === 'REDUCTION' && tx.note.includes('ชดเชย') && isToday(tx.date))
+
     isOffline.value = false
     
     // Cache user specific data
@@ -429,6 +528,8 @@ const loadUserData = async () => {
           ecommerceOrders.value = cacheData.ecommerceOrders
           foodOrders.value = cacheData.foodOrders
           transactions.value = cacheData.transactions
+          bikeLogged.value = (cacheData.transactions || []).some(tx => tx.type === 'REDUCTION' && tx.note.includes('ปั่นจักรยาน') && isToday(tx.date))
+          offsetBought.value = (cacheData.transactions || []).some(tx => tx.type === 'REDUCTION' && tx.note.includes('ชดเชย') && isToday(tx.date))
         } catch (e) {
           console.error('Failed to parse cached data:', e)
         }
@@ -479,25 +580,39 @@ const loadUserData = async () => {
 
 // 1. Dynamic Greeting Name mapping
 const displayFirstName = computed(() => {
-  const uid = selectedUserId.value
-  if (uid === 'u001') return 'สมชาย'
-  if (uid === 'u002') return 'อลิส'
-  if (uid === 'u005') return 'วิชัย'
-  
   if (!selectedUser.value) return 'ผู้ใช้งาน'
-  const name = selectedUser.value.name
-  if (name === 'Somchai Jaidee') return 'สมชาย'
-  if (name === 'Alice Smith' || name === 'Alice Green') return 'อลิส'
-  if (name === 'Mana Dee') return 'มานะ'
-  if (name === 'Somsri Jai-ngam') return 'สมศรี'
-  return name.split(' ')[0]
+  const name = selectedUser.value.name || ''
+  
+  if (name.includes('Somchai')) return 'สมชาย'
+  if (name.includes('Alice')) return 'อลิส'
+  if (name.includes('Wichai')) return 'วิชัย'
+  if (name.includes('Mana')) return 'มานะ'
+  if (name.includes('Somsri')) return 'สมศรี'
+  
+  return name.split(' ')[0] || 'ผู้ใช้งาน'
 })
 
 // 2. Dynamic Carbon Saved calculation
 const carbonSaved = computed(() => {
   let saved = 0.5 // Start with base recycling savings for online mode
-  if (bikeLogged.value) saved += 2.5
-  if (offsetBought.value) saved += 200.0
+  
+  if (!isOffline.value) {
+    transactions.value.forEach(tx => {
+      if (tx.type === 'REDUCTION') {
+        if (tx.note.includes('ปั่นจักรยาน')) {
+          saved += 2.5
+        } else if (tx.note.includes('ปลูกต้น')) {
+          const match = tx.note.match(/ลดคาร์บอน\s*(\d+(\.\d+)?)\s*kg/)
+          saved += match ? parseFloat(match[1]) : 15.0
+        } else {
+          saved += 200.0
+        }
+      }
+    })
+  } else {
+    if (bikeLogged.value) saved += 2.5
+    if (offsetBought.value) saved += 200.0
+  }
 
   // Add savings from choosing low-emission options in online database
   foodOrders.value.forEach(order => {
@@ -558,6 +673,7 @@ const calculations = computed(() => {
       list.push({
         id: ticket.ticket_id,
         date: ticket.flights?.departure_time || 'N/A',
+        rawDate: ticket.flights?.departure_time || '',
         category: 'การบิน',
         title: `เที่ยวบิน ${ticket.flights?.origin || 'BKK'}-${ticket.flights?.destination || 'CNX'}`,
         desc: `${ticket.flights?.airline || 'สายการบิน'} ${ticket.seat ? `ที่นั่ง ${ticket.seat}` : ''}`,
@@ -582,6 +698,7 @@ const calculations = computed(() => {
       list.push({
         id: booking.booking_id,
         date: booking.check_in,
+        rawDate: booking.check_in || '',
         category: 'การเดินทาง/ที่พัก',
         title: `จองโรงแรม ${booking.hotels?.name || 'โรงแรม'}`,
         desc: `${booking.hotels?.location || ''} (${nights} คืน)`,
@@ -616,6 +733,7 @@ const calculations = computed(() => {
       list.push({
         id: order.order_id,
         date: order.timestamp,
+        rawDate: order.timestamp || '',
         category: 'ช้อปปิ้ง',
         title: `สั่งของออนไลน์`,
         desc: names.length > 0 ? names.join(', ') : 'ช้อปปิ้งสินค้าทั่วไป',
@@ -651,6 +769,7 @@ const calculations = computed(() => {
       list.push({
         id: order.order_id,
         date: '2026-06-12T18:00:00Z',
+        rawDate: '2026-06-12T18:00:00Z',
         category: 'อาหาร',
         title: `สั่งเดลิเวอรี่ร้าน ${order.restaurants?.name || 'ร้านอาหาร'}`,
         desc: itemsList.join(', '),
@@ -698,10 +817,49 @@ const calculations = computed(() => {
       list.push({
         id: tx.txn_id,
         date: tx.date,
+        rawDate: tx.date || '',
         category: category,
         title: `จ่ายเงินค่า${tx.note || tx.category}`,
         desc: `ธุรกรรมการเงิน ฿${amt.toLocaleString()}`,
         co2: txCo2,
+        status: 'COMPLETED',
+        icon: icon,
+        bgClass: bgClass
+      })
+    } else if (tx.type === 'REDUCTION') {
+      let co2 = 0
+      let category = 'ชดเชยคาร์บอน'
+      let icon = 'ph:leaf-bold'
+      let bgClass = 'bg-green-50 text-green-600'
+      const isBike = tx.note.includes('ปั่นจักรยาน')
+      const isTree = tx.note.includes('ปลูกต้น')
+      
+      if (isBike) {
+        co2 = -2.5
+        co2Travel += co2
+        category = 'การเดินทาง/ที่พัก'
+        icon = 'ph:bicycle-bold'
+      } else if (isTree) {
+        const match = tx.note.match(/ลดคาร์บอน\s*(\d+(\.\d+)?)\s*kg/)
+        co2 = match ? -parseFloat(match[1]) : -15.0
+        co2Travel += co2
+        category = 'ปลูกต้นไม้'
+        icon = 'ph:tree-bold'
+      } else {
+        co2 = -200.0
+        co2Flight += co2
+        category = 'ชดเชยคาร์บอน'
+        icon = 'ph:leaf-bold'
+      }
+
+      list.push({
+        id: tx.txn_id,
+        date: tx.date,
+        rawDate: tx.date || '',
+        category: category,
+        title: isBike ? 'ปั่นจักรยานไปทำงาน' : (isTree ? tx.note.split(' (')[0] : 'ซื้อคาร์บอนเครดิตชดเชย'),
+        desc: isBike ? 'แทนการขับรถยนต์ส่วนบุคคล (ลดคาร์บอน)' : (isTree ? 'โครงการฟื้นฟูป่าสิ่งแวดล้อม' : 'โครงการปลูกป่าชุมชนทดแทน'),
+        co2: co2,
         status: 'COMPLETED',
         icon: icon,
         bgClass: bgClass
@@ -726,15 +884,23 @@ const calculations = computed(() => {
 // 4. State calculations for either Offline (screenshot) or Online mode
 const displayTotalCO2 = computed(() => {
   let amt = calculations.value.totalCO2
-  if (bikeLogged.value) amt = Math.max(0, amt - 2.5)
-  if (offsetBought.value) amt = Math.max(0, amt - 200.0)
+  
+  if (isOffline.value) {
+    if (bikeLogged.value) amt = Math.max(0, amt - 2.5)
+    if (offsetBought.value) amt = Math.max(0, amt - 200.0)
+  }
+  
   return amt
 })
 
 const displayEcoPoints = computed(() => {
   let basePoints = calculations.value.totalPoints
-  if (bikeLogged.value) basePoints += 100
-  if (offsetBought.value) basePoints += 500
+  
+  if (isOffline.value) {
+    if (bikeLogged.value) basePoints += 100
+    if (offsetBought.value) basePoints += 500
+  }
+  
   return basePoints
 })
 
@@ -831,29 +997,33 @@ const conicGradientStyle = computed(() => {
 const recentDisplayActivities = computed(() => {
   const list = []
 
-  // Add offset/bike actions at the top if logged
-  if (offsetBought.value) {
-    list.push({
-      id: 'mock-offset',
-      icon: 'ph:leaf-bold',
-      bgClass: 'bg-green-50 text-green-700',
-      title: 'ซื้อคาร์บอนเครดิตชดเชย',
-      desc: 'โครงการปลูกป่าชุมชนทดแทน',
-      date: 'วันนี้',
-      co2: -200.0
-    })
-  }
+  // Add offset/bike actions at the top only if offline
+  if (isOffline.value) {
+    if (offsetBought.value) {
+      list.push({
+        id: 'mock-offset',
+        icon: 'ph:leaf-bold',
+        bgClass: 'bg-green-50 text-green-700',
+        title: 'ซื้อคาร์บอนเครดิตชดเชย',
+        desc: 'โครงการปลูกป่าชุมชนทดแทน',
+        date: 'วันนี้',
+        rawDate: new Date().toISOString(),
+        co2: -200.0
+      })
+    }
 
-  if (bikeLogged.value) {
-    list.push({
-      id: 'mock-bike',
-      icon: 'ph:bicycle-bold',
-      bgClass: 'bg-green-50 text-green-700',
-      title: 'ปั่นจักรยานไปทำงาน',
-      desc: 'แทนการขับรถยนต์ส่วนบุคคล (ลดคาร์บอน)',
-      date: 'วันนี้',
-      co2: -2.5
-    })
+    if (bikeLogged.value) {
+      list.push({
+        id: 'mock-bike',
+        icon: 'ph:bicycle-bold',
+        bgClass: 'bg-green-50 text-green-700',
+        title: 'ปั่นจักรยานไปทำงาน',
+        desc: 'แทนการขับรถยนต์ส่วนบุคคล (ลดคาร์บอน)',
+        date: 'วันนี้',
+        rawDate: new Date().toISOString(),
+        co2: -2.5
+      })
+    }
   }
 
   // Map database activities
@@ -875,6 +1045,7 @@ const recentDisplayActivities = computed(() => {
       title: act.title,
       desc: act.desc,
       date: simpleDate,
+      rawDate: act.rawDate || act.date || '',
       co2: act.co2
     }
   })
@@ -882,7 +1053,14 @@ const recentDisplayActivities = computed(() => {
   // Combine list
   list.push(...mapped)
 
-  // Sort custom bike/offset at the very top, and sort the rest by date (simulated by list index order)
+  // Sort activities by rawDate in descending order (newest first)
+  list.sort((a, b) => {
+    const da = new Date(a.rawDate || 0).getTime()
+    const db = new Date(b.rawDate || 0).getTime()
+    return db - da
+  })
+
+  // Take top 5
   return list.slice(0, 5)
 })
 
@@ -918,6 +1096,9 @@ const subscribeRealtime = () => {
       loadUserData()
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'planted_trees', filter: `user_id=eq.${selectedUserId.value}` }, () => {
       loadUserData()
     })
     .subscribe()

@@ -117,38 +117,21 @@ const fetchUsersList = async () => {
           'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'  // Prasit
         ]
         
-        let pts = u.loyalty_points
+        let pts = u.loyalty_points || 0
         let co2Level = 'Low'
         let co2Progress = 20
         let name = u.name
 
-        if (u.user_id === 'u001') {
-          pts = 1248
-          co2Level = 'Moderate'
-          co2Progress = 60
-          name = 'Somchai Jaidee'
-        } else if (u.user_id === 'u002') {
-          pts = 858
-          co2Level = 'Low'
-          co2Progress = 25
-          name = 'Alice Green'
-        } else if (u.user_id === 'u005') {
-          pts = 2188
+        // Dynamic calculation for all users based on their points
+        if (pts > 2000) {
           co2Level = 'High'
-          co2Progress = 90
-          name = 'Wichai Nilsuwan'
+          co2Progress = 85
+        } else if (pts > 800) {
+          co2Level = 'Moderate'
+          co2Progress = 55
         } else {
-          // Dynamic calculation for other users
-          if (pts > 2000) {
-            co2Level = 'High'
-            co2Progress = 85
-          } else if (pts > 800) {
-            co2Level = 'Moderate'
-            co2Progress = 50
-          } else {
-            co2Level = 'Low'
-            co2Progress = 15
-          }
+          co2Level = 'Low'
+          co2Progress = 20
         }
 
         return {
@@ -180,6 +163,14 @@ const selectProfile = (user) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem('selected_user_id', user.user_id)
     selectedUserId.value = user.user_id
+    
+    // Save to shared state
+    const selectedUserProfile = useState('selected_user_profile')
+    selectedUserProfile.value = {
+      user_id: user.user_id,
+      name: user.name,
+      loyalty_points: user.pts
+    }
     navigateTo('/')
   }
 }
