@@ -163,6 +163,7 @@ const waterLogs = ref([])
 const loading = ref(true)
 const searchQuery = ref('')
 const activeTab = ref('ALL')
+const isOffline = useOffline()
 
 const tabOptions = [
   { label: '🌏 ทั้งหมด', value: 'ALL' },
@@ -216,8 +217,37 @@ const fetchWaterData = async () => {
         return { ...item, ph_level, tds_value, status }
       })
     }
+    isOffline.value = false
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('offline_cache_locations', JSON.stringify(waterLogs.value))
+    }
   } catch (error) {
     console.error('Error in fetching process:', error)
+    isOffline.value = true
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('offline_cache_locations')
+      if (cached) {
+        waterLogs.value = JSON.parse(cached)
+      } else {
+        // Fallback default mock locations list
+        const mockData = [
+          { location_id: 'L001', name: 'โรงพยาบาลส่งเสริมสุขภาพตำบลแม่เหียะ', type: 'HOSPITAL', address: 'ต.แม่เหียะ อ.เมืองเชียงใหม่ จ.เชียงใหม่' },
+          { location_id: 'L002', name: 'โรงแรมศิริปันนา วิลล่า รีสอร์ท แอนด์ สปา', type: 'HOTEL', address: 'ต.วัดเกต อ.เมืองเชียงใหม่ จ.เชียงใหม่' },
+          { location_id: 'L003', name: 'ร้านอาหารสวนผักโอ้กะจู๋ สาขานิ่มซิตี้', type: 'RESTAURANT', address: 'ต.หายยา อ.เมืองเชียงใหม่ จ.เชียงใหม่' }
+        ]
+        waterLogs.value = mockData.map((item, index) => {
+          const seed = item.name.length + index
+          const ph_level = Math.round((5.8 + (seed % 4) * 0.6) * 10) / 10
+          let tds_value = 110 + (seed % 6) * 60
+          if (item.type === 'HOSPITAL') tds_value = 35 + (seed % 3) * 20
+          if (item.type === 'RESTAURANT') tds_value = 240 + (seed % 4) * 55
+          let status = 'Good'
+          if (ph_level < 6.4 || ph_level > 7.8 || tds_value > 250) status = 'Fair'
+          if (ph_level < 6.0 || tds_value > 400) status = 'Poor'
+          return { ...item, ph_level, tds_value, status }
+        })
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -250,6 +280,13 @@ const translateStatus = (status) => {
 }
 
 onMounted(() => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('selected_user_id')
+    if (!saved) {
+      navigateTo('/select-profile')
+      return
+    }
+  }
   fetchWaterData()
 })
 </script>

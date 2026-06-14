@@ -9,8 +9,7 @@
           Flora Analysis & Afforestation
         </h2>
         <p class="text-xs text-gray-500 mt-1">
-          ผู้ใช้งานจำลอง: <span class="font-extrabold text-emerald-900">{{ displayUserName }}</span> | 
-          สถานะเครื่องยนต์: <span class="font-bold uppercase text-xs" :class="engineMode === 'online' ? 'text-blue-600' : 'text-green-600'">{{ engineMode }}</span>
+          ผู้ใช้งานจำลอง: <span class="font-extrabold text-emerald-900">{{ displayUserName }}</span>
         </p>
       </div>
 
@@ -637,9 +636,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 
 // shared states matching layout and settings.vue
-const engineMode = useState('engine_mode', () => 'offline')
 const selectedUserId = useState('selected_user_id', () => 'u001')
 const offsetBought = useState('offset_bought', () => false)
+const isOffline = useOffline()
 
 // Tabs configuration
 const tabs = [
@@ -771,24 +770,52 @@ const headers = {
 
 // Compute display user name
 const displayUserName = computed(() => {
-  if (engineMode.value === 'offline') return 'Somchai Jaidee (ออฟไลน์แคช)'
+  const uid = selectedUserId.value
+  if (uid === 'u001') return 'Somchai Jaidee'
+  if (uid === 'u002') return 'Alice Green'
+  if (uid === 'u005') return 'Wichai Nilsuwan'
+  
   if (userProfile.value) return userProfile.value.name
   return 'กำลังดึงข้อมูลผู้ใช้...'
 })
 
-// Load active user's details from database if online
+// Load active user's details from database
 const loadUserProfile = async () => {
-  if (engineMode.value !== 'online') {
-    userProfile.value = null
-    return
-  }
   try {
     const userRes = await $fetch(`${SUPABASE_URL}/rest/v1/users?user_id=eq.${selectedUserId.value}`, { headers })
     if (userRes && userRes.length > 0) {
       userProfile.value = userRes[0]
     }
+    isOffline.value = false
   } catch (err) {
     console.error('Error fetching user profile in flora analysis:', err)
+    isOffline.value = true
+    
+    // Load from cache
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`offline_cache_user_data_${selectedUserId.value}`)
+      if (cached) {
+        try {
+          const cacheData = JSON.parse(cached)
+          userProfile.value = cacheData.selectedUser
+        } catch (e) {
+          console.error(e)
+        }
+      } else {
+        // Fallback mockup names
+        const names = {
+          'u001': 'Somchai Jaidee',
+          'u002': 'Alice Green',
+          'u005': 'Wichai Nilsuwan',
+          'u003': 'Mana Dee',
+          'u004': 'Somsri Jai-ngam'
+        }
+        userProfile.value = {
+          user_id: selectedUserId.value,
+          name: names[selectedUserId.value] || 'Somchai Jaidee'
+        }
+      }
+    }
   }
 }
 
@@ -1086,6 +1113,15 @@ watch(selectedUserId, () => {
 })
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('selected_user_id')
+    if (saved) {
+      selectedUserId.value = saved
+    } else {
+      navigateTo('/select-profile')
+      return
+    }
+  }
   await loadUserProfile()
   loadPlantedTrees()
 })

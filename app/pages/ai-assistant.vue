@@ -35,7 +35,7 @@
     <div class="px-6 pt-4 bg-white">
       <div class="bg-[#e8f5e9] text-xs text-green-800 py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 border border-[#cbe5d4] font-semibold">
         <Icon name="ph:info-bold" class="w-4 h-4 text-green-700 flex-shrink-0" />
-        <span>AI ใช้ข้อมูลการปล่อยคาร์บอนของ {{ selectedUser?.name || 'Somchai' }} ในเดือนมิถุนายน เป็นบริบทในการตอบคำถาม</span>
+        <span>AI ใช้ข้อมูลการปล่อยคาร์บอนของ {{ displayFullName }} ในเดือนมิถุนายน เป็นบริบทในการตอบคำถาม</span>
       </div>
     </div>
 
@@ -138,8 +138,8 @@ const config = useRuntimeConfig()
 
 // shared global states
 const selectedUserId = useState('selected_user_id', () => 'u001')
-const engineMode = useState('engine_mode', () => 'offline')
 const geminiApiKey = useState('gemini_api_key', () => config.public.geminiApiKey || '')
+const isOffline = useOffline()
 
 const inputMessage = ref('')
 const typing = ref(false)
@@ -155,7 +155,7 @@ const headers = {
 }
 
 // Compute if engine is online or cloud
-const isOnline = computed(() => engineMode.value === 'online' || engineMode.value === 'cloud')
+const isOnline = computed(() => true)
 
 // User dynamic states
 const selectedUser = ref(null)
@@ -167,9 +167,28 @@ const hotelBookings = ref([])
 const transactions = ref([])
 
 const displayFirstName = computed(() => {
-  if (!isOnline.value) return 'Somchai'
-  if (!selectedUser.value) return 'User'
-  return selectedUser.value.name.split(' ')[0]
+  const uid = selectedUserId.value
+  if (uid === 'u001') return 'สมชาย'
+  if (uid === 'u002') return 'อลิส'
+  if (uid === 'u005') return 'วิชัย'
+  
+  if (!selectedUser.value) return 'ผู้ใช้งาน'
+  const name = selectedUser.value.name
+  if (name === 'Somchai Jaidee') return 'สมชาย'
+  if (name === 'Alice Smith' || name === 'Alice Green') return 'อลิส'
+  if (name === 'Mana Dee') return 'มานะ'
+  if (name === 'Somsri Jai-ngam') return 'สมศรี'
+  return name.split(' ')[0]
+})
+
+const displayFullName = computed(() => {
+  const uid = selectedUserId.value
+  if (uid === 'u001') return 'Somchai Jaidee'
+  if (uid === 'u002') return 'Alice Green'
+  if (uid === 'u005') return 'Wichai Nilsuwan'
+  
+  if (selectedUser.value) return selectedUser.value.name
+  return 'Somchai Jaidee'
 })
 
 // Quick prompts list
@@ -308,6 +327,20 @@ const sendCustomMessage = () => {
 const generateAIResponse = async (userText) => {
   typing.value = true
   scrollToBottom()
+
+  // 0. Check connection status
+  if (isOffline.value) {
+    setTimeout(() => {
+      typing.value = false
+      messages.value.push({
+        id: Date.now(),
+        sender: 'ai',
+        text: 'ขณะนี้ระบบอยู่ในโหมดออฟไลน์ ไม่สามารถส่งคำถามหา AI ได้ชั่วคราวครับ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของท่าน 🌐'
+      })
+      scrollToBottom()
+    }, 600)
+    return
+  }
 
   // 1. Check if Gemini API key is configured
   const apiKey = geminiApiKey.value || config.public.geminiApiKey
@@ -476,14 +509,24 @@ const fetchProducts = async () => {
       })
     }
     productsMap.value = map
+    isOffline.value = false
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('offline_cache_products', JSON.stringify(productsMap.value))
+    }
   } catch (err) {
     console.error('Error fetching products map:', err)
+    isOffline.value = true
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('offline_cache_products')
+      if (cached) {
+        productsMap.value = JSON.parse(cached)
+      }
+    }
   }
 }
 
 // Fetch user dynamic data
 const fetchUserData = async () => {
-  if (!isOnline.value) return
   loading.value = true
   try {
     const [userRes, flightsRes, hotelsRes, ecommerceRes, foodRes, txsRes] = await Promise.all([
@@ -501,35 +544,90 @@ const fetchUserData = async () => {
     ecommerceOrders.value = ecommerceRes || []
     foodOrders.value = foodRes || []
     transactions.value = txsRes || []
+
+    isOffline.value = false
+
+    // Cache user specific data
+    if (typeof window !== 'undefined') {
+      const cacheData = {
+        selectedUser: selectedUser.value,
+        flightTickets: flightTickets.value,
+        hotelBookings: hotelBookings.value,
+        ecommerceOrders: ecommerceOrders.value,
+        foodOrders: foodOrders.value,
+        transactions: transactions.value
+      }
+      localStorage.setItem(`offline_cache_user_data_${selectedUserId.value}`, JSON.stringify(cacheData))
+    }
   } catch (err) {
-    console.error('Error fetching Supabase database context:', err)
+    console.warn('Network error fetching user data context in assistant:', err)
+    isOffline.value = true
+
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`offline_cache_user_data_${selectedUserId.value}`)
+      if (cached) {
+        try {
+          const cacheData = JSON.parse(cached)
+          selectedUser.value = cacheData.selectedUser
+          flightTickets.value = cacheData.flightTickets
+          hotelBookings.value = cacheData.hotelBookings
+          ecommerceOrders.value = cacheData.ecommerceOrders
+          foodOrders.value = cacheData.foodOrders
+          transactions.value = cacheData.transactions
+        } catch (e) {
+          console.error('Failed to parse cached data in assistant:', e)
+        }
+      } else {
+        // Fallback mockup
+        if (selectedUserId.value === 'u001') {
+          selectedUser.value = { name: 'Somchai Jaidee', user_id: 'u001', loyalty_points: 1240 }
+          flightTickets.value = [{ ticket_id: 'f1', flights: { origin: 'BKK', destination: 'CNX', airline: 'AirAsia' }, status: 'COMPLETED' }]
+          transactions.value = [
+            { txn_id: 'tx1', type: 'EXPENSE', category: 'Transport', amount: 1370 },
+            { txn_id: 'tx2', type: 'EXPENSE', category: 'Shopping', amount: 5140 },
+            { txn_id: 'tx3', type: 'EXPENSE', category: 'Food', amount: 2770 }
+          ]
+        } else if (selectedUserId.value === 'u002') {
+          selectedUser.value = { name: 'Alice Green', user_id: 'u002', loyalty_points: 858 }
+          flightTickets.value = []
+          transactions.value = []
+        } else if (selectedUserId.value === 'u005') {
+          selectedUser.value = { name: 'Wichai Nilsuwan', user_id: 'u005', loyalty_points: 2188 }
+          flightTickets.value = []
+          transactions.value = []
+        } else {
+          selectedUser.value = { name: 'User', user_id: selectedUserId.value, loyalty_points: 500 }
+          flightTickets.value = []
+          transactions.value = []
+        }
+      }
+    }
   } finally {
     loading.value = false
   }
 }
 
-// Watch for changes in user or engine mode to trigger data reload
-watch([selectedUserId, engineMode], async () => {
-  if (isOnline.value) {
-    await fetchUserData()
-  } else {
-    // Reset data back to default/empty offline mode values
-    selectedUser.value = null
-    flightTickets.value = []
-    hotelBookings.value = []
-    ecommerceOrders.value = []
-    foodOrders.value = []
-    transactions.value = []
-  }
+// Watch for changes in user to trigger data reload
+watch(selectedUserId, async () => {
+  await fetchUserData()
   initGreeting()
 })
 
 onMounted(async () => {
-  geminiApiKey.value = config.public.geminiApiKey || ''
-  await fetchProducts()
-  if (isOnline.value) {
-    await fetchUserData()
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('selected_user_id')
+    if (saved) {
+      selectedUserId.value = saved
+    } else {
+      navigateTo('/select-profile')
+      return
+    }
+    geminiApiKey.value = localStorage.getItem('gemini_api_key') || config.public.geminiApiKey || ''
+  } else {
+    geminiApiKey.value = config.public.geminiApiKey || ''
   }
+  await fetchProducts()
+  await fetchUserData()
   initGreeting()
   scrollToBottom()
 })

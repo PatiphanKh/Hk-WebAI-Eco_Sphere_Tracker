@@ -2,28 +2,18 @@
   <div>
     <div class="mb-8">
       <p class="text-sm text-gray-500 mb-1">Eco-Sphere Settings</p>
-      <h2 class="text-3xl font-bold text-gray-950">Simulator Settings</h2>
+      <h2 class="text-3xl font-bold text-gray-950">System Settings</h2>
     </div>
 
     <div class="space-y-6 max-w-4xl">
-      <!-- Simulator Config -->
+      <!-- System & API Config -->
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
         <h3 class="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
           <Icon name="ph:sliders-horizontal-duotone" class="w-5 h-5 text-green-600" />
-          การตั้งค่า Simulator & Engine
+          การตั้งค่าระบบ
         </h3>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Engine การทำงาน</label>
-            <select 
-              v-model="engineInput"
-              class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-white transition"
-            >
-              <option value="offline">Local Fallback Engine (Offline)</option>
-              <option value="cloud">Cloud Native Engine (Online)</option>
-            </select>
-          </div>
           
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">ความถี่การซิงค์ข้อมูล (วินาที)</label>
@@ -41,7 +31,7 @@
                 v-model="cacheOfflineInput"
                 class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" 
               />
-              <span class="text-sm text-gray-700 font-semibold">บันทึกประวัติการจำลองใน Cache เมื่อออฟไลน์ (Local Offline Sync)</span>
+              <span class="text-sm text-gray-700 font-semibold">เปิดใช้งาน Local Offline Sync (สำรองในแคช)</span>
             </label>
           </div>
         </div>
@@ -100,34 +90,38 @@ import { ref, onMounted } from 'vue'
 const config = useRuntimeConfig()
 
 // globally shared states
-const engineMode = useState('engine_mode', () => 'offline')
-const geminiApiKey = useState('gemini_api_key', () => config.public.geminiApiKey || '')
+const selectedUserId = useState('selected_user_id', () => 'u001')
 
 // local inputs
-const engineInput = ref('offline')
 const syncFreqInput = ref(30)
 const cacheOfflineInput = ref(true)
 const usernameInput = ref('Somchai Jaidee')
 
 const loadSettings = () => {
   if (typeof window !== 'undefined') {
-    engineInput.value = localStorage.getItem('engine_mode') || 'offline'
     syncFreqInput.value = parseInt(localStorage.getItem('sync_frequency') || '30', 10)
     cacheOfflineInput.value = localStorage.getItem('cache_offline') !== 'false'
-    usernameInput.value = localStorage.getItem('username') || 'Somchai Jaidee'
+    
+    // Read selected user id and map usernameInput
+    const savedId = localStorage.getItem('selected_user_id')
+    if (savedId) {
+      selectedUserId.value = savedId
+    }
+    const names = {
+      'u001': 'Somchai Jaidee',
+      'u002': 'Alice Green',
+      'u005': 'Wichai Nilsuwan'
+    }
+    usernameInput.value = names[selectedUserId.value] || localStorage.getItem('username') || 'Somchai Jaidee'
   }
 }
 
 const saveSettings = () => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('engine_mode', engineInput.value)
     localStorage.setItem('sync_frequency', syncFreqInput.value.toString())
     localStorage.setItem('cache_offline', cacheOfflineInput.value.toString())
     localStorage.setItem('username', usernameInput.value)
   }
-
-  // Update shared states
-  engineMode.value = engineInput.value
 
   alert('บันทึกการตั้งค่าเรียบร้อยแล้ว!')
 }

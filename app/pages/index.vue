@@ -1,5 +1,6 @@
 <template>
-  <div>
+  <ClientOnly>
+    <div>
     <!-- Greeting & Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
       <div>
@@ -13,38 +14,6 @@
       
       <!-- Daily Status Badge & Mode Toggle -->
       <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-        <!-- Engine Status Toggle Badge -->
-        <button 
-          @click="toggleEngine"
-          class="text-xs px-3.5 py-2 rounded-full font-extrabold border flex items-center gap-2 transition shadow-sm bg-white"
-          :class="engineMode === 'online' 
-            ? 'text-blue-700 border-blue-200 hover:bg-blue-50' 
-            : 'text-green-700 border-green-200 hover:bg-green-50'"
-          title="สลับโหมดการดึงข้อมูล"
-        >
-          <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" :class="engineMode === 'online' ? 'bg-blue-400' : 'bg-green-400'"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2" :class="engineMode === 'online' ? 'bg-blue-500' : 'bg-green-500'"></span>
-          </span>
-          <span>Engine: {{ engineMode === 'online' ? 'Online Database' : 'Offline Cache' }}</span>
-        </button>
-
-        <!-- Dynamic User Selector (Only visible in Online Mode) -->
-        <div v-if="engineMode === 'online'" class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full shadow-sm border border-gray-200">
-          <label for="user-select" class="text-[10px] font-bold text-gray-500 uppercase">จำลอง:</label>
-          <select 
-            id="user-select" 
-            v-model="selectedUserId"
-            @change="loadUserData" 
-            class="bg-transparent text-xs font-bold text-gray-900 focus:outline-none cursor-pointer"
-            :disabled="loading"
-          >
-            <option v-for="u in usersList" :key="u.user_id" :value="u.user_id">
-              {{ u.name }}
-            </option>
-          </select>
-        </div>
-
         <!-- Daily Status Card -->
         <div class="border border-[#cbe5d4] rounded-full px-4 py-1.5 flex items-center gap-2.5 bg-white shadow-sm">
           <span class="text-xs font-bold text-emerald-950">สถานะรายวัน ปกติ</span>
@@ -288,22 +257,21 @@
 
     <!-- Hidden Anchor for Scroll To -->
     <div id="audit-trail" class="mt-8"></div>
-  </div>
+    </div>
+    <template #fallback>
+      <div class="flex flex-col items-center justify-center min-h-[60vh]">
+        <Icon name="ph:circle-notch-bold" class="w-12 h-12 text-[#1b4332] animate-spin mb-4" />
+        <p class="text-sm text-emerald-950 font-extrabold">กำลังโหลดข้อมูลแดชบอร์ดส่วนตัวของคุณ...</p>
+      </div>
+    </template>
+  </ClientOnly>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
 // shared state with layout
-const engineMode = useState('engine_mode', () => 'offline')
-
-const toggleEngine = () => {
-  engineMode.value = engineMode.value === 'offline' ? 'online' : 'offline'
-  // Auto reload if online
-  if (engineMode.value === 'online') {
-    loadUserData()
-  }
-}
+const isOffline = useOffline()
 
 // Interactive states
 const bikeLogged = ref(false)
@@ -345,12 +313,30 @@ const fetchUsers = async () => {
   try {
     const data = await $fetch(`${SUPABASE_URL}/rest/v1/users?select=*&order=name`, { headers })
     usersList.value = data || []
-    const defaultUser = data?.find(u => u.user_id === 'u001')
-    if (defaultUser) {
-      selectedUserId.value = defaultUser.user_id
+    isOffline.value = false
+    // Cache users list
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('offline_cache_users', JSON.stringify(usersList.value))
     }
   } catch (err) {
     console.error('Error fetching users:', err)
+    isOffline.value = true
+    // Fallback to cache
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('offline_cache_users')
+      if (cached) {
+        usersList.value = JSON.parse(cached)
+      } else {
+        // Mock fallback if first run and offline
+        usersList.value = [
+          { user_id: 'u001', name: 'Somchai Jaidee' },
+          { user_id: 'u002', name: 'Alice Green' },
+          { user_id: 'u005', name: 'Wichai Nilsuwan' },
+          { user_id: 'u003', name: 'Mana Dee' },
+          { user_id: 'u004', name: 'Somsri Jai-ngam' }
+        ]
+      }
+    }
   }
 }
 
@@ -365,14 +351,32 @@ const fetchProducts = async () => {
       })
     }
     productsMap.value = map
+    isOffline.value = false
+    // Cache products
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('offline_cache_products', JSON.stringify(productsMap.value))
+    }
   } catch (err) {
     console.error('Error fetching products map:', err)
+    isOffline.value = true
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('offline_cache_products')
+      if (cached) {
+        productsMap.value = JSON.parse(cached)
+      } else {
+        // Fallback mock product map
+        productsMap.value = {
+          'p001': { product_id: 'p001', name: 'เสื้อผ้าแฟชั่นมือหนึ่ง', category: 'Fashion' },
+          'p002': { product_id: 'p002', name: 'อุปกรณ์อิเล็กทรอนิกส์ทั่วไป', category: 'Electronics' },
+          'p003': { product_id: 'p003', name: 'สมุดบันทึกจากกระดาษรีไซเคิล', category: 'Eco' }
+        }
+      }
+    }
   }
 }
 
 // Fetch user data from database
 const loadUserData = async () => {
-  if (engineMode.value !== 'online') return
   loading.value = true
   error.value = null
   bikeLogged.value = false
@@ -393,9 +397,79 @@ const loadUserData = async () => {
     ecommerceOrders.value = ecommerceRes || []
     foodOrders.value = foodRes || []
     transactions.value = txsRes || []
+    
+    isOffline.value = false
+    
+    // Cache user specific data
+    if (typeof window !== 'undefined') {
+      const cacheData = {
+        selectedUser: selectedUser.value,
+        flightTickets: flightTickets.value,
+        hotelBookings: hotelBookings.value,
+        ecommerceOrders: ecommerceOrders.value,
+        foodOrders: foodOrders.value,
+        transactions: transactions.value
+      }
+      localStorage.setItem(`offline_cache_user_data_${selectedUserId.value}`, JSON.stringify(cacheData))
+    }
   } catch (err) {
-    console.error('Error loading Supabase user data:', err)
-    error.value = 'ไม่สามารถดึงข้อมูลประวัติกิจกรรมและคาร์บอนฟุตพริ้นท์ของผู้ใช้ได้'
+    console.warn('Network error, loading cache for user:', selectedUserId.value, err)
+    isOffline.value = true
+    
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`offline_cache_user_data_${selectedUserId.value}`)
+      if (cached) {
+        try {
+          const cacheData = JSON.parse(cached)
+          selectedUser.value = cacheData.selectedUser
+          flightTickets.value = cacheData.flightTickets
+          hotelBookings.value = cacheData.hotelBookings
+          ecommerceOrders.value = cacheData.ecommerceOrders
+          foodOrders.value = cacheData.foodOrders
+          transactions.value = cacheData.transactions
+        } catch (e) {
+          console.error('Failed to parse cached data:', e)
+        }
+      } else {
+        // First-run offline fallback: Load beautiful simulated mockup dataset matching original screenshots
+        if (selectedUserId.value === 'u001') {
+          selectedUser.value = { name: 'Somchai Jaidee', user_id: 'u001', loyalty_points: 1240 }
+          
+          flightTickets.value = [
+            { ticket_id: 'f1', flights: { origin: 'BKK', destination: 'CNX', airline: 'AirAsia', departure_time: '2026-06-14T10:00:00Z' }, status: 'COMPLETED' }
+          ]
+          hotelBookings.value = []
+          ecommerceOrders.value = []
+          foodOrders.value = []
+          transactions.value = [
+            { txn_id: 'tx1', type: 'EXPENSE', category: 'Transport', amount: 1370, note: 'ขับรถไปทำงาน', date: '2026-06-13T08:00:00Z' }, // 68.5 kg CO2
+            { txn_id: 'tx2', type: 'EXPENSE', category: 'Shopping', amount: 5140, note: 'สั่งของออนไลน์', date: '2026-06-11T09:00:00Z' }, // 51.4 kg CO2
+            { txn_id: 'tx3', type: 'EXPENSE', category: 'Food', amount: 2770, note: 'บุฟเฟต์ปิ้งย่าง', date: '2026-06-12T12:00:00Z' }  // 27.7 kg CO2
+          ]
+        } else if (selectedUserId.value === 'u002') {
+          selectedUser.value = { name: 'Alice Green', user_id: 'u002', loyalty_points: 858 }
+          flightTickets.value = []
+          hotelBookings.value = []
+          ecommerceOrders.value = []
+          foodOrders.value = []
+          transactions.value = []
+        } else if (selectedUserId.value === 'u005') {
+          selectedUser.value = { name: 'Wichai Nilsuwan', user_id: 'u005', loyalty_points: 2188 }
+          flightTickets.value = []
+          hotelBookings.value = []
+          ecommerceOrders.value = []
+          foodOrders.value = []
+          transactions.value = []
+        } else {
+          selectedUser.value = { name: 'User', user_id: selectedUserId.value, loyalty_points: 500 }
+          flightTickets.value = []
+          hotelBookings.value = []
+          ecommerceOrders.value = []
+          foodOrders.value = []
+          transactions.value = []
+        }
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -403,11 +477,15 @@ const loadUserData = async () => {
 
 // 1. Dynamic Greeting Name mapping
 const displayFirstName = computed(() => {
-  if (engineMode.value === 'offline') return 'สมชาย'
+  const uid = selectedUserId.value
+  if (uid === 'u001') return 'สมชาย'
+  if (uid === 'u002') return 'อลิส'
+  if (uid === 'u005') return 'วิชัย'
+  
   if (!selectedUser.value) return 'ผู้ใช้งาน'
   const name = selectedUser.value.name
   if (name === 'Somchai Jaidee') return 'สมชาย'
-  if (name === 'Alice Smith') return 'อลิส'
+  if (name === 'Alice Smith' || name === 'Alice Green') return 'อลิส'
   if (name === 'Mana Dee') return 'มานะ'
   if (name === 'Somsri Jai-ngam') return 'สมศรี'
   return name.split(' ')[0]
@@ -415,55 +493,48 @@ const displayFirstName = computed(() => {
 
 // 2. Dynamic Carbon Saved calculation
 const carbonSaved = computed(() => {
-  let saved = 12.4 // Base savings in offline mode to match screenshot exactly
-  if (engineMode.value === 'online') {
-    saved = 0.5 // Start with base recycling savings for online mode
-    if (bikeLogged.value) saved += 2.5
-    if (offsetBought.value) saved += 200.0
+  let saved = 0.5 // Start with base recycling savings for online mode
+  if (bikeLogged.value) saved += 2.5
+  if (offsetBought.value) saved += 200.0
 
-    // Add savings from choosing low-emission options in online database
-    foodOrders.value.forEach(order => {
-      if (order.status !== 'CANCELLED') {
-        const itemsList = order.menu_items || []
-        const hasMeat = itemsList.some(item => {
-          const lower = item.toLowerCase()
-          return lower.includes('steak') || lower.includes('burger') || lower.includes('chicken') || 
-                 lower.includes('pizza') || lower.includes('sushi') || lower.includes('ramen') || 
-                 lower.includes('curry') || lower.includes('kung') || lower.includes('spaghetti') || 
-                 lower.includes('rice') || lower.includes('pad thai')
-        })
-        const isHealthyCuisine = order.restaurants?.cuisine === 'Healthy'
-        const hasSaladOrSomTum = itemsList.some(item => {
-          const lower = item.toLowerCase()
-          return lower.includes('salad') || lower.includes('som tum')
-        })
-        const isLowEmission = (isHealthyCuisine || hasSaladOrSomTum) && !hasMeat
-        if (isLowEmission) {
-          saved += (8.0 - 1.2) // Saved 6.8 kg by choosing vegetarian/salad
-        }
+  // Add savings from choosing low-emission options in online database
+  foodOrders.value.forEach(order => {
+    if (order.status !== 'CANCELLED') {
+      const itemsList = order.menu_items || []
+      const hasMeat = itemsList.some(item => {
+        const lower = item.toLowerCase()
+        return lower.includes('steak') || lower.includes('burger') || lower.includes('chicken') || 
+               lower.includes('pizza') || lower.includes('sushi') || lower.includes('ramen') || 
+               lower.includes('curry') || lower.includes('kung') || lower.includes('spaghetti') || 
+               lower.includes('rice') || lower.includes('pad thai')
+      })
+      const isHealthyCuisine = order.restaurants?.cuisine === 'Healthy'
+      const hasSaladOrSomTum = itemsList.some(item => {
+        const lower = item.toLowerCase()
+        return lower.includes('salad') || lower.includes('som tum')
+      })
+      const isLowEmission = (isHealthyCuisine || hasSaladOrSomTum) && !hasMeat
+      if (isLowEmission) {
+        saved += (8.0 - 1.2) // Saved 6.8 kg by choosing vegetarian/salad
       }
-    })
+    }
+  })
 
-    ecommerceOrders.value.forEach(order => {
-      if (order.status !== 'CANCELLED') {
-        const itemsList = order.items || []
-        itemsList.forEach(item => {
-          const prod = productsMap.value[item.product_id]
-          if (prod) {
-            const qty = item.qty || 1
-            const isHigh = prod.category === 'Fashion' || prod.category === 'Electronics'
-            if (!isHigh) {
-              saved += (15.0 - 1.5) * qty // Saved 13.5 kg per low emission/recycled item
-            }
+  ecommerceOrders.value.forEach(order => {
+    if (order.status !== 'CANCELLED') {
+      const itemsList = order.items || []
+      itemsList.forEach(item => {
+        const prod = productsMap.value[item.product_id]
+        if (prod) {
+          const qty = item.qty || 1
+          const isHigh = prod.category === 'Fashion' || prod.category === 'Electronics'
+          if (!isHigh) {
+            saved += (15.0 - 1.5) * qty // Saved 13.5 kg per low emission/recycled item
           }
-        })
-      }
-    })
-  } else {
-    // Offline mode: base is 12.4, and we add bike / offset if logged
-    if (bikeLogged.value) saved += 2.5
-    if (offsetBought.value) saved += 200.0
-  }
+        }
+      })
+    }
+  })
 
   return Math.round(saved * 10) / 10
 })
@@ -652,22 +723,14 @@ const calculations = computed(() => {
 
 // 4. State calculations for either Offline (screenshot) or Online mode
 const displayTotalCO2 = computed(() => {
-  if (engineMode.value === 'online') {
-    let amt = calculations.value.totalCO2
-    if (bikeLogged.value) amt = Math.max(0, amt - 2.5)
-    if (offsetBought.value) amt = Math.max(0, amt - 200.0)
-    return amt
-  } else {
-    // Exact screenshot base total = 342.8
-    let amt = 342.8
-    if (bikeLogged.value) amt -= 2.5
-    if (offsetBought.value) amt -= 200.0
-    return Math.max(0, amt)
-  }
+  let amt = calculations.value.totalCO2
+  if (bikeLogged.value) amt = Math.max(0, amt - 2.5)
+  if (offsetBought.value) amt = Math.max(0, amt - 200.0)
+  return amt
 })
 
 const displayEcoPoints = computed(() => {
-  let basePoints = engineMode.value === 'online' ? calculations.value.totalPoints : 1240
+  let basePoints = calculations.value.totalPoints
   if (bikeLogged.value) basePoints += 100
   if (offsetBought.value) basePoints += 500
   return basePoints
@@ -682,17 +745,10 @@ const ecoLevel = computed(() => {
 
 // Highest Category details
 const displayHighestCategory = computed(() => {
-  let flight = 195.2
-  let travel = 68.5
-  let shop = 51.4
-  let food = 27.7
-
-  if (engineMode.value === 'online') {
-    flight = calculations.value.co2Flight
-    travel = calculations.value.co2Travel
-    shop = calculations.value.co2Shopping
-    food = calculations.value.co2Food
-  }
+  let flight = calculations.value.co2Flight
+  let travel = calculations.value.co2Travel
+  let shop = calculations.value.co2Shopping
+  let food = calculations.value.co2Food
 
   // subtract logged actions
   if (bikeLogged.value) travel = Math.max(0, travel - 2.5)
@@ -731,17 +787,10 @@ const displayTargetRemaining = computed(() => {
 
 // Breakdown Data List
 const displayBreakdown = computed(() => {
-  let flight = 195.2
-  let travel = 68.5
-  let shop = 51.4
-  let food = 27.7
-
-  if (engineMode.value === 'online') {
-    flight = calculations.value.co2Flight
-    travel = calculations.value.co2Travel
-    shop = calculations.value.co2Shopping
-    food = calculations.value.co2Food
-  }
+  let flight = calculations.value.co2Flight
+  let travel = calculations.value.co2Travel
+  let shop = calculations.value.co2Shopping
+  let food = calculations.value.co2Food
 
   if (bikeLogged.value) travel = Math.max(0, travel - 2.5)
   if (offsetBought.value) flight = Math.max(0, flight - 200.0)
@@ -805,82 +854,31 @@ const recentDisplayActivities = computed(() => {
     })
   }
 
-  if (engineMode.value === 'offline') {
-    // Exactly matches screenshot activities
-    list.push(
-      {
-        id: 'act-1',
-        icon: 'ph:airplane-bold',
-        bgClass: 'bg-red-50 text-red-600 border border-red-100',
-        title: 'เที่ยวบิน BKK-CNX',
-        desc: 'AirAsia FD3441',
-        date: '14 ต.ค. 24',
-        co2: 124.5
-      },
-      {
-        id: 'act-2',
-        icon: 'ph:fork-knife-bold',
-        bgClass: 'bg-green-50 text-green-600 border border-green-100',
-        title: 'บุฟเฟต์ปิ้งย่าง',
-        desc: 'เนื้อวัวนำเข้า',
-        date: '13 ต.ค. 24',
-        co2: 18.2
-      },
-      {
-        id: 'act-3',
-        icon: 'ph:car-bold',
-        bgClass: 'bg-blue-50 text-blue-600 border border-blue-100',
-        title: 'ขับรถไปทำงาน',
-        desc: '15 km (Honda Civic)',
-        date: '13 ต.ค. 24',
-        co2: 3.4
-      },
-      {
-        id: 'act-4',
-        icon: 'ph:recycle-bold',
-        bgClass: 'bg-green-50 text-green-700 border border-green-200',
-        title: 'รีไซเคิลขวดพลาสติก',
-        desc: 'ตู้ Vending',
-        date: '12 ต.ค. 24',
-        co2: -0.5
-      },
-      {
-        id: 'act-5',
-        icon: 'ph:shopping-bag-bold',
-        bgClass: 'bg-yellow-50 text-yellow-600 border border-yellow-100',
-        title: 'สั่งของออนไลน์',
-        desc: 'บรรจุภัณฑ์พลาสติก',
-        date: '11 ต.ค. 24',
-        co2: 4.1
-      }
-    )
-  } else {
-    // Map database activities
-    const mapped = calculations.value.activities.map(act => {
-      // Formats date to simple format like '14 ต.ค. 24'
-      let simpleDate = 'N/A'
-      if (act.date && act.date !== 'N/A') {
-        const d = new Date(act.date)
-        simpleDate = d.toLocaleDateString('th-TH', {
-          day: 'numeric',
-          month: 'short',
-          year: '2-digit'
-        })
-      }
-      return {
-        id: act.id,
-        icon: act.icon,
-        bgClass: act.bgClass,
-        title: act.title,
-        desc: act.desc,
-        date: simpleDate,
-        co2: act.co2
-      }
-    })
-    
-    // Combine list
-    list.push(...mapped)
-  }
+  // Map database activities
+  const mapped = calculations.value.activities.map(act => {
+    // Formats date to simple format like '14 ต.ค. 24'
+    let simpleDate = 'N/A'
+    if (act.date && act.date !== 'N/A') {
+      const d = new Date(act.date)
+      simpleDate = d.toLocaleDateString('th-TH', {
+        day: 'numeric',
+        month: 'short',
+        year: '2-digit'
+      })
+    }
+    return {
+      id: act.id,
+      icon: act.icon,
+      bgClass: act.bgClass,
+      title: act.title,
+      desc: act.desc,
+      date: simpleDate,
+      co2: act.co2
+    }
+  })
+  
+  // Combine list
+  list.push(...mapped)
 
   // Sort custom bike/offset at the very top, and sort the rest by date (simulated by list index order)
   return list.slice(0, 5)
@@ -895,12 +893,19 @@ const scrollToAudit = () => {
 }
 
 onMounted(async () => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('selected_user_id')
+    if (saved) {
+      selectedUserId.value = saved
+    } else {
+      navigateTo('/select-profile')
+      return
+    }
+  }
   await Promise.all([
     fetchUsers(),
     fetchProducts()
   ])
-  if (engineMode.value === 'online') {
-    await loadUserData()
-  }
+  await loadUserData()
 })
 </script>
