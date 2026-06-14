@@ -268,10 +268,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
 // shared state with layout
 const isOffline = useOffline()
+const supabase = useSupabaseClient()
+let realtimeChannel = null
 
 // Interactive states
 const bikeLogged = ref(false)
@@ -892,6 +894,35 @@ const scrollToAudit = () => {
   }
 }
 
+const subscribeRealtime = () => {
+  if (typeof window === 'undefined') return
+  
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+  }
+
+  realtimeChannel = supabase.channel(`dashboard-user-${selectedUserId.value}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_tickets', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'hotel_bookings', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ecommerce_orders', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      loadUserData()
+    })
+    .subscribe()
+}
+
 onMounted(async () => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('selected_user_id')
@@ -907,5 +938,12 @@ onMounted(async () => {
     fetchProducts()
   ])
   await loadUserData()
+  subscribeRealtime()
+})
+
+onBeforeUnmount(() => {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+  }
 })
 </script>

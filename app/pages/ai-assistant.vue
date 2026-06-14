@@ -132,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch, onBeforeUnmount } from 'vue'
 
 const config = useRuntimeConfig()
 
@@ -140,6 +140,8 @@ const config = useRuntimeConfig()
 const selectedUserId = useState('selected_user_id', () => 'u001')
 const geminiApiKey = useState('gemini_api_key', () => config.public.geminiApiKey || '')
 const isOffline = useOffline()
+const supabase = useSupabaseClient()
+let realtimeChannel = null
 
 const inputMessage = ref('')
 const typing = ref(false)
@@ -607,10 +609,40 @@ const fetchUserData = async () => {
   }
 }
 
-// Watch for changes in user to trigger data reload
+const subscribeRealtime = () => {
+  if (typeof window === 'undefined') return
+  
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+  }
+
+  realtimeChannel = supabase.channel(`assistant-user-${selectedUserId.value}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      fetchUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'flight_tickets', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      fetchUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'hotel_bookings', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      fetchUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ecommerce_orders', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      fetchUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'food_orders', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      fetchUserData()
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${selectedUserId.value}` }, () => {
+      fetchUserData()
+    })
+    .subscribe()
+}
+
+// Watch for changes in user to trigger data reload and resubscribe
 watch(selectedUserId, async () => {
   await fetchUserData()
   initGreeting()
+  subscribeRealtime()
 })
 
 onMounted(async () => {
@@ -630,5 +662,12 @@ onMounted(async () => {
   await fetchUserData()
   initGreeting()
   scrollToBottom()
+  subscribeRealtime()
+})
+
+onBeforeUnmount(() => {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel)
+  }
 })
 </script>
